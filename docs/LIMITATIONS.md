@@ -9,3 +9,4 @@ Highlights:
 - **Screenshots, malware, compromised devices** defeat confidentiality regardless of ciphertext-at-rest.
 - **Metadata** (membership, sizes, timing) visible to operator — minimization is partial only.
 - **Opt-in AI** sends **only user-selected excerpts** to Mistral through Edge Functions — normal send/decrypt never calls AI.
+- **Device PIN vs account password** — resetting the device PIN / replacing local keys does not decrypt old ciphertext if the original private material is gone; recovery-key restore is not fully implemented yet.

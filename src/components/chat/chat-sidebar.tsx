@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { MessageSquarePlus, Search, UserRound, Users } from "lucide-react";
+import { MessageSquarePlus, Search, Settings, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/lib/conversation-service";
 import { createGroupRpc, fetchActiveMemberUserIds, publishGroupEpochKey } from "@/lib/group-service";
 import { parsePublicKeyBundleJson } from "@/lib/crypto/session";
+import { APP_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -246,7 +247,7 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+      <div className="flex items-center gap-2 px-4 pb-3 pt-4">
         <DropdownMenu>
           <DropdownMenuTrigger
             className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/50 bg-card/40 px-3 py-2.5 text-left outline-none ring-offset-background transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring"
@@ -255,20 +256,36 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
             <Avatar className="size-10 shrink-0 border border-border/50">
               <AvatarFallback className="bg-primary/10 text-sm font-semibold">{initials}</AvatarFallback>
             </Avatar>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold leading-tight">{displayName || "You"}</p>
-              <p className="truncate text-xs text-muted-foreground">@{username || "…"}</p>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-[15px] font-semibold leading-snug tracking-tight">{displayName || "You"}</p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground/90">@{username || "username"}</p>
             </div>
             <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-52">
             <DropdownMenuItem onClick={() => setProfileOpen(true)}>Edit profile</DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                props.onNavigate?.();
+                router.push("/settings/security");
+              }}
+            >
+              Security settings
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={() => void signOut()}>
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Link
+          href="/settings/security"
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-muted/20 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Security settings"
+          onClick={() => props.onNavigate?.()}
+        >
+          <Settings className="size-[18px]" aria-hidden />
+        </Link>
       </div>
 
       <div className="px-4 pb-3">
@@ -276,8 +293,8 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             readOnly
-            className="h-10 cursor-pointer rounded-xl border-border/60 bg-muted/25 pl-10 text-sm shadow-none"
-            placeholder="Search chats & contacts…"
+            className="h-10 cursor-pointer rounded-xl border-border/60 bg-muted/25 pl-10 text-sm shadow-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder="Search people or chats"
             onClick={() => setNewChatOpen(true)}
             onFocus={() => setNewChatOpen(true)}
           />
@@ -317,7 +334,7 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
                 ) : results.length === 0 ? (
                   <div className="px-4 py-12 text-center">
                     <p className="text-sm font-medium text-foreground">No contacts found</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Try another username or invite them to CipherSafe.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Try another username or invite them to {APP_NAME}.</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-border/50">
@@ -347,13 +364,13 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
             onClick={() => setGroupDlgOpen(true)}
           >
             <Users className="mr-2 size-4" aria-hidden />
-            Group
+            New group
           </Button>
           <DialogContent className="gap-0 overflow-hidden border-border/70 p-0 sm:max-w-md">
             <DialogHeader className="border-b border-border/60 px-6 py-5 text-left">
               <DialogTitle className="font-semibold tracking-tight">New encrypted group</DialogTitle>
               <p className="text-xs text-muted-foreground">
-                Symmetric epoch keys are wrapped to each member&apos;s primary device. Not MLS — fine for small MVP groups only.
+                Symmetric keys are shared with the group — best for small teams, not huge rooms.
               </p>
             </DialogHeader>
             <div className="space-y-3 px-6 py-4">
@@ -393,7 +410,7 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
                 )}
               </div>
               <Button className="w-full rounded-xl font-medium" type="button" onClick={() => void submitNewGroup()}>
-                Create & distribute epoch 1 key
+                Create group
               </Button>
             </div>
           </DialogContent>
@@ -415,12 +432,10 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
               <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/8">
                 <MessageSquarePlus className="size-6 text-primary/80" aria-hidden />
               </div>
-              <p className="text-sm font-semibold tracking-tight">No chats yet</p>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Start an encrypted conversation — messages are sealed before they sync.
-              </p>
+              <p className="text-sm font-semibold tracking-tight">No conversations yet</p>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Start your first private chat.</p>
               <Button className="mt-6 rounded-xl" variant="secondary" type="button" onClick={() => setNewChatOpen(true)}>
-                Compose first message
+                Start chat
               </Button>
             </div>
           ) : (

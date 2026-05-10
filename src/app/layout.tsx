@@ -19,9 +19,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SecureTalks · Private by design",
+  title: "Privyra · Private conversations, made simple",
   description:
-    "SecureTalks — privacy-first E2EE web messenger prototype: ciphertext in Supabase, plaintext only on your unlocked device. Encrypted attachments, disappearing messages, opt-in AI.",
+    "Privyra — private messaging with encryption before your words leave your device. Optional AI, encrypted attachments, and a privacy check when you need it.",
 };
 
 export default function RootLayout(props: Readonly<{ children: React.ReactNode }>) {

@@ -4,9 +4,9 @@
 
 <div align="center">
 
-# 🔐 SecureTalks
+# 🔐 Privyra · SecureTalks
 
-**A privacy-first E2EE web messenger prototype with server-blind encrypted storage, identity verification, encrypted attachments, disappearing messages, and opt-in AI tools.**
+**Private conversations, made simple.** A privacy-first E2EE web messenger prototype (repo **SecureTalks**) with server-blind encrypted storage, identity verification, encrypted attachments, disappearing messages, and opt-in AI tools.
 
 [![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=22&duration=2800&pause=700&color=22C55E&center=true&vCenter=true&width=780&lines=Libsodium+X25519+%2B+XChaCha20-Poly1305;Ciphertext-only+rows+in+Postgres;Encrypted+attachments+%B7+disappearing+TTL;Prototype+%E2%80%94+honest+threat+model)](https://github.com/kulharshit21/SecureTalks)
 
@@ -29,7 +29,7 @@
 
 **Privyra / SecureTalks** is a **privacy-first encrypted messaging prototype**: plaintext stays in an **unlocked browser session**; **Supabase** holds **ciphertext**, AEAD metadata, and **encrypted** Storage blobs. **Attachments** (encrypt-then-upload) use the private **`encrypted-attachments`** bucket for **direct** chats — group attach remains **incomplete** in UI. **Disappearing messages** combine `expires_at`, **RLS**, **`purge_expired_messages()`**, and **`cleanup_expired_messages()`**. **Group chat** is a small-team MVP (symmetric epochs — **not MLS**). **Opt-in AI** runs only via **`mistral-ai-assist` Edge Function** (Next proxy disabled by default); normal send/decrypt never calls AI.
 
-**Docs:** `SECURITY_CLAIMS.md` · `LIMITATIONS.md` · `DEPLOYMENT.md` · `DEMO_SCRIPT.md` · `docs/THREAT_MODEL.md` · `docs/SECURITY_MODEL.md`
+**Docs:** `SECURITY_CLAIMS.md` · `LIMITATIONS.md` · `DEPLOYMENT.md` · `DEMO_SCRIPT.md` · `docs/THREAT_MODEL.md` · `docs/SECURITY_MODEL.md` · `docs/PRODUCTION_ENV_CHECKLIST.md` · `docs/CRON_CLEANUP.md`
 
 > ⚠️ Timers and server deletion **do not** stop screenshots, malware, or a compromised device. This project **does not** claim to be “more secure than WhatsApp” without an independent audit — see **LIMITATIONS.md**.
 
@@ -149,6 +149,10 @@ Apply SQL from `supabase/migrations/` via Supabase CLI or SQL editor (order matt
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test` | Vitest unit/crypto tests |
 | `npm run test:e2e` | Playwright (configure env first) |
+| `npm run security:edge-health` | Probe Edge Functions (cleanup + AI); needs `.env.local` with anon URL/key |
+| `npm run smoke:two-user-chat` | Optional multi-user smoke script (configure test accounts first) |
+
+**Auth / device recovery (UI):** `/forgot-password`, `/reset-password`, `/recover-device`, `/settings/security` — see `docs/SECURITY_MODEL.md`.
 
 ---
 

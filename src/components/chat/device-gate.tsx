@@ -1,10 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { KeyRound, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +33,7 @@ import { serializePrivateCryptoBundle, bytesToB64 } from "@/lib/crypto/keys";
 import { publicBundleRecordToJson } from "@/lib/crypto/session";
 import { cryptoSecretStorage } from "@/lib/crypto/storage";
 import { deleteVaultRecord, loadWrappedRecord, storeWrappedIdentity, unlockIdentity } from "@/lib/device-vault";
+import { APP_NAME } from "@/lib/brand";
 import { useCipherSession } from "@/stores/cipher-session";
 
 type Phase = "loading" | "setup" | "unlock";
@@ -44,6 +54,12 @@ export function DeviceGate(props: { userId: string; children: React.ReactNode })
   const [unlockPin, setUnlockPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [forgotPinOpen, setForgotPinOpen] = useState(false);
+  const [recoverySoonOpen, setRecoverySoonOpen] = useState(false);
+  const [resetDeviceOpen, setResetDeviceOpen] = useState(false);
+  const [resetAccountPassword, setResetAccountPassword] = useState("");
+  const [resetDialogError, setResetDialogError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -191,6 +207,61 @@ export function DeviceGate(props: { userId: string; children: React.ReactNode })
     }
   }
 
+  async function confirmResetDevice() {
+    setResetDialogError(null);
+    const pw = resetAccountPassword.trim();
+    if (pw.length < 8) {
+      setResetDialogError("Enter your account password to confirm.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const email = user?.email?.trim();
+      if (!email) {
+        throw new Error("Sign in again, then retry reset.");
+      }
+
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({ email, password: pw });
+      if (reauthErr) {
+        throw new Error("That password doesn’t match this account.");
+      }
+
+      const vault = await loadWrappedRecord(props.userId);
+      if (!vault) {
+        throw new Error("No local vault found — try setting up this device again.");
+      }
+
+      const { error: revokeErr } = await supabase
+        .from("devices")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("id", vault.deviceId)
+        .eq("user_id", props.userId);
+
+      if (revokeErr) {
+        throw revokeErr;
+      }
+
+      await deleteVaultRecord(props.userId);
+      await cryptoSecretStorage.clearNamespace(props.userId);
+      cipherSession.lock();
+      setUnlockPin("");
+      setResetAccountPassword("");
+      setResetDeviceOpen(false);
+      setForgotPinOpen(false);
+      setResetDialogError(null);
+      setPhase("setup");
+      setSetupStep("welcome");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Reset failed.";
+      setResetDialogError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onUnlock() {
     setError(null);
     setBusy(true);
@@ -260,8 +331,8 @@ export function DeviceGate(props: { userId: string; children: React.ReactNode })
                 <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
                   <p className="font-medium text-foreground">Recovery warning</p>
                   <p>
-                    Your device PIN wraps your encryption keys in IndexedDB. If you forget it, <strong>messages cannot be
-                    recovered</strong> — not by CipherSafe and not by Supabase.
+                    Your PIN protects the private key on this device. If you lose it, <strong>old messages may not open</strong>{" "}
+                    here without your recovery key. {APP_NAME} cannot unlock them for you.
                   </p>
                   <p>Use a passphrase you can rehearse. Consider a password manager.</p>
                 </div>
@@ -344,7 +415,7 @@ export function DeviceGate(props: { userId: string; children: React.ReactNode })
 
           {phase === "unlock" ? (
             <div className="space-y-5 animate-in fade-in duration-300">
-              <p className="text-sm text-muted-foreground">Enter your device PIN to decrypt local key material for this session.</p>
+              <p className="text-sm text-muted-foreground">Enter your device PIN to unlock messaging on this browser.</p>
               <div className="space-y-2">
                 <Label htmlFor="unlock-pin">Device PIN</Label>
                 <Input
@@ -362,9 +433,20 @@ export function DeviceGate(props: { userId: string; children: React.ReactNode })
               <Button className="h-11 w-full rounded-xl font-medium" disabled={busy} onClick={() => void onUnlock()}>
                 Unlock
               </Button>
+              <button
+                type="button"
+                className="w-full text-center text-sm font-medium text-primary underline-offset-4 hover:underline disabled:opacity-50"
+                disabled={busy}
+                onClick={() => {
+                  setError(null);
+                  setForgotPinOpen(true);
+                }}
+              >
+                Forgot device PIN?
+              </button>
               <Button
                 variant="outline"
-                className="h-11 w-full rounded-xl"
+                className="h-11 w-full rounded-xl text-muted-foreground"
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
@@ -380,12 +462,125 @@ export function DeviceGate(props: { userId: string; children: React.ReactNode })
                   }
                 }}
               >
-                Reset local vault
+                Remove keys from this browser
               </Button>
+              <p className="text-center text-[11px] text-muted-foreground">
+                Need your account password?{" "}
+                <Link className="font-medium text-foreground underline-offset-4 hover:underline" href="/forgot-password">
+                  Reset access
+                </Link>
+              </p>
             </div>
           ) : null}
         </CardContent>
       </Card>
+
+      <Dialog open={forgotPinOpen} onOpenChange={setForgotPinOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Forgot device PIN?</DialogTitle>
+            <DialogDescription className="text-left text-sm leading-relaxed">
+              Your PIN protects the private key on this device. If you reset it, you may need your recovery key to restore old
+              messages on this browser.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <Button
+              variant="secondary"
+              className="h-11 rounded-xl"
+              type="button"
+              onClick={() => {
+                setForgotPinOpen(false);
+                setRecoverySoonOpen(true);
+              }}
+            >
+              I have my recovery key
+            </Button>
+            <Button
+              variant="default"
+              className="h-11 rounded-xl"
+              type="button"
+              onClick={() => {
+                setForgotPinOpen(false);
+                setResetDeviceOpen(true);
+              }}
+            >
+              Reset this device
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" className="rounded-xl" type="button" onClick={() => setForgotPinOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={recoverySoonOpen} onOpenChange={setRecoverySoonOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Recovery key restore</DialogTitle>
+            <DialogDescription className="text-left text-sm leading-relaxed">
+              Recovery key restore is coming soon. You can reset this device now with your account password, but{" "}
+              <strong>older messages may not decrypt</strong> without the original device key or a future recovery flow.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="rounded-xl" type="button" onClick={() => setRecoverySoonOpen(false)}>
+              Close
+            </Button>
+            <Button
+              className="rounded-xl"
+              type="button"
+              onClick={() => {
+                setRecoverySoonOpen(false);
+                setResetDeviceOpen(true);
+              }}
+            >
+              Reset device access
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resetDeviceOpen} onOpenChange={(o) => {
+        setResetDeviceOpen(o);
+        if (!o) {
+          setResetDialogError(null);
+          setResetAccountPassword("");
+        }
+      }}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Reset device access</DialogTitle>
+            <DialogDescription className="text-left text-sm leading-relaxed">
+              Verify by entering your <strong>account password</strong> (not your device PIN). We&apos;ll revoke this device&apos;s
+              keys in your account, clear local data, and let you create a new device key. Your account stays open, but{" "}
+              <strong>old messages may not open</strong> without the original keys or recovery.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="reset-acct-pw">Account password</Label>
+            <Input
+              id="reset-acct-pw"
+              type="password"
+              autoComplete="current-password"
+              className="h-11 rounded-xl"
+              value={resetAccountPassword}
+              onChange={(e) => setResetAccountPassword(e.target.value)}
+            />
+          </div>
+          {resetDialogError ? <p className="text-sm text-destructive">{resetDialogError}</p> : null}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="rounded-xl" type="button" onClick={() => setResetDeviceOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="rounded-xl" type="button" disabled={busy} onClick={() => void confirmResetDevice()}>
+              {busy ? "Working…" : "Verify & reset device"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

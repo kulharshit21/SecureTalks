@@ -92,9 +92,9 @@ export function SecurityDashboard(props: { userId: string }) {
               <Activity className="size-6 text-primary" strokeWidth={1.75} aria-hidden />
             </div>
             <div>
-              <h2 className="text-lg font-semibold tracking-tight md:text-xl">Security dashboard</h2>
+              <h2 className="text-lg font-semibold tracking-tight md:text-xl">Technical diagnostics</h2>
               <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                Inspectable signals only — no plaintext logging, no private keys on the wire to this panel.
+                For developers and audits — inspectable signals only. No plaintext logging, no private keys sent to this panel.
               </p>
             </div>
           </div>

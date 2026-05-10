@@ -2,7 +2,7 @@
 
 **Production AI + audit surfaces use Supabase Edge Functions** (`mistral-ai-assist`, `security-audit`) so Mistral secrets never ship in the Next bundle. Next `/api/*` proxies stay **off** unless `AI_PROXY_USE_NEXT_ROUTE=true` (local dev).
 
-This document states **what CipherSafe Phase&nbsp;1 protects, what it does not, and where honesty matters.**
+This document states **what Privyra Phase&nbsp;1 protects, what it does not, and where honesty matters.**
 
 ## Guarantees (relative to the MVP design)
 
@@ -32,6 +32,12 @@ The façade in `src/lib/crypto/types.ts` is the stable seam:
 
 See `THREAT_MODEL.md` for adversary assumptions.
 
+## Device PIN, reset, and recovery (honesty)
+
+- **Account password** (Supabase Auth) controls who can open your account — not who can read past message ciphertext on a new browser.
+- **Device PIN** wraps local private keys. Forgetting it means this browser cannot decrypt unless you have a working recovery path for those keys.
+- **In-app reset** (after re-authentication with the account password) can revoke the current device row and clear local vault data so you can register fresh device keys. **Older messages may remain undecryptable** without the prior keys or a future recovery-key implementation. Privyra does not email or upload private keys or recovery secrets.
+
 ---
 
 ## Operational threat scenarios (high level)
@@ -43,7 +49,7 @@ See `THREAT_MODEL.md` for adversary assumptions.
 | **Compromised user laptop/browser** | Malware can read decrypted transcripts after PIN unlock; capture keystrokes; scrape IndexedDB | Out-of-band device revocation UX remains roadmap debt (`devices.revoked_at` starts posture only). |
 | **Revoked or stale device** | Old ciphertext might remain decryptable for epochs wrapped before revocation unless rotations purge visibility client-side | Group MVP rotates symmetric epochs administratively — partial hygiene until MLS/device transcripts shrink automatically. |
 | **Malicious group member** | Can screenshot plaintext once decrypted on-device; can spam ciphertext or withhold rotations | Cryptographic removal requires MLS-grade PCS semantics — MVP warns admins to rotate after removals but former insiders retain historic ciphertext locally. |
-| **Screenshots / screen recording / cloud backups** | Human-factor leakage orthogonal to transport crypto | Copy warns persist throughout CipherSafe UI. |
+| **Screenshots / screen recording / cloud backups** | Human-factor leakage orthogonal to transport crypto | Copy warns persist throughout Privyra UI. |
 | **Push / desktop notifications** | OS surfaces snippets supplied by browser/OS integrations outside ciphertext envelope today | Disable previews server/client-wide until payloads omit sensitive previews entirely (tracked backlog). |
 
 ## MLS roadmap

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageCircle, PanelLeft, Shield } from "lucide-react";
 
+import { APP_NAME } from "@/lib/brand";
+
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { DeviceGate } from "@/components/chat/device-gate";
 import { PrivacyPanelSheet, PrivacyPanelTrigger } from "@/components/chat/privacy-panel-sheet";
@@ -88,15 +90,15 @@ export function ChatShell(props: { userId: string; children: React.ReactNode }) 
                 <PanelLeft className="size-5" aria-hidden />
               </button>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold tracking-tight">CipherSafe</p>
-                <p className="truncate text-[11px] text-muted-foreground">E2EE · server-blind sync</p>
+                <p className="truncate text-sm font-semibold tracking-tight">{APP_NAME}</p>
+                <p className="truncate text-[11px] text-muted-foreground">Private · synced safely</p>
               </div>
             </div>
 
             <div className="hidden min-w-0 flex-1 md:block">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Messenger</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{APP_NAME}</p>
               <p className="truncate text-sm font-medium tracking-tight text-foreground">
-                {pathname.startsWith("/chat/") && pathname.length > "/chat/".length ? "Encrypted conversation" : "Inbox"}
+                {pathname.startsWith("/chat/") && pathname.length > "/chat/".length ? "Conversation" : "Inbox"}
               </p>
             </div>
 
@@ -106,7 +108,7 @@ export function ChatShell(props: { userId: string; children: React.ReactNode }) 
                 className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden rounded-xl gap-2 sm:inline-flex")}
               >
                 <Shield className="size-4" aria-hidden />
-                Audit
+                Privacy check
               </Link>
               <PrivacyPanelTrigger
                 className="xl:hidden"

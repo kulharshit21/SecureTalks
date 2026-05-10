@@ -79,9 +79,9 @@ export default function SecurityAuditPage() {
           <Shield className="size-6 text-primary" aria-hidden />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Security audit</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Privacy check</h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Read-only checks against the database snapshot RPC plus repository probes. This page does not print secrets.
+            Advanced diagnostics — read-only signals. This page does not print secrets.
           </p>
           <Link href="/chat" className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "rounded-xl")}>
             Back to inbox

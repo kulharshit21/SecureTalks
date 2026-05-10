@@ -73,7 +73,7 @@ function AiSummarizeExportMounted(props: {
         <DialogHeader className="border-b border-border/60 px-6 py-4 text-left">
           <DialogTitle>Summarize selected export</DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
-            Only the text below is sent to Mistral after you confirm. Edit or remove lines before running.
+            Only the text below is sent to the AI service after you confirm. Edit or remove lines before running.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[42vh] space-y-2 overflow-y-auto px-6 py-4">
@@ -98,7 +98,7 @@ function AiSummarizeExportMounted(props: {
             Close
           </Button>
           <Button type="button" size="sm" className="rounded-xl" disabled={busy} onClick={() => void runSummarize()}>
-            {busy ? "Working…" : "Send to Mistral & summarize"}
+            {busy ? "Working…" : "Summarize with AI"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -177,7 +177,7 @@ function AiReportAnalysisMounted(props: {
         <DialogHeader className="border-b border-border/60 px-6 py-4 text-left">
           <DialogTitle>Report analysis (AI-assisted)</DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
-            Only the message you confirm below is sent to Mistral for triage guidance. This does not notify a human moderator
+            Only the message you confirm below is sent for automated triage guidance. This does not notify a human moderator
             automatically.
           </DialogDescription>
         </DialogHeader>
@@ -200,7 +200,7 @@ function AiReportAnalysisMounted(props: {
             Close
           </Button>
           <Button type="button" size="sm" className="rounded-xl" disabled={busy} onClick={() => void runAnalysis()}>
-            {busy ? "Working…" : "Confirm & analyze with Mistral"}
+            {busy ? "Working…" : "Confirm & analyze"}
           </Button>
         </DialogFooter>
       </DialogContent>

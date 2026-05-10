@@ -1,5 +1,5 @@
 /**
- * CipherSafe client crypto types (libsodium-backed).
+ * Privyra client crypto types (libsodium-backed).
  * Phase: X25519 DH + Ed25519 signatures + XChaCha20-Poly1305 AEAD with structured AAD.
  * Not a full audited Signal deployment — see SECURITY_MODEL.md.
  */

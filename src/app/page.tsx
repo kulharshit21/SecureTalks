@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { APP_NAME, TAGLINE, TAGLINE_ALT } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 export default function Home() {
@@ -36,8 +37,8 @@ export default function Home() {
               <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" aria-hidden />
             </div>
             <div className="leading-tight">
-              <span className="block text-[15px] font-semibold tracking-tight">CipherSafe</span>
-              <span className="hidden text-[11px] font-medium text-muted-foreground sm:block">Client-side encryption</span>
+              <span className="block text-[15px] font-semibold tracking-tight">{APP_NAME}</span>
+              <span className="hidden text-[11px] font-medium text-muted-foreground sm:block">{TAGLINE}</span>
             </div>
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2">
@@ -65,23 +66,23 @@ export default function Home() {
             <div className="max-w-xl animate-in fade-in slide-in-from-bottom-4 duration-700 lg:max-w-none">
               <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-gradient-to-r from-primary/[0.07] via-accent/80 to-primary/[0.07] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground/90 shadow-sm backdrop-blur-sm">
                 <Sparkles className="size-3.5 text-primary" aria-hidden />
-                Zero-trust messaging
+                {TAGLINE_ALT}
               </div>
 
               <h1 className="text-balance font-heading text-[2.5rem] font-semibold leading-[1.05] tracking-tight text-foreground md:text-5xl lg:text-[3.5rem] xl:text-[3.75rem]">
-                Messages only your{" "}
+                {TAGLINE.split(",")[0]}
+                <span className="text-muted-foreground">,</span>{" "}
                 <span className="relative whitespace-nowrap">
                   <span className="relative z-[1] bg-gradient-to-r from-foreground via-primary to-foreground/80 bg-clip-text text-transparent">
-                    devices
+                    made simple
                   </span>
                   <span className="absolute -inset-x-1 -bottom-1 z-0 h-3 rounded-full bg-gradient-to-r from-primary/30 via-primary/12 to-transparent blur-md" aria-hidden />
-                </span>{" "}
-                can read.
+                </span>
+                .
               </h1>
 
               <p className="mt-7 max-w-lg text-pretty text-lg leading-relaxed text-muted-foreground md:text-xl md:leading-relaxed">
-                End-to-end envelopes on every send. Supabase stores ciphertext and public keys only — plaintext unlocks on your device after you
-                enter your local passphrase.
+                A calm inbox built for real conversations. Your words stay yours — locked on your device before anything syncs.
               </p>
 
               <div className="mt-10 flex flex-wrap items-center gap-3">
@@ -107,9 +108,9 @@ export default function Home() {
               </div>
 
               <dl className="mt-12 grid gap-3 sm:grid-cols-3">
-                <HeroMetric value="E2EE" label="Envelope per message" />
-                <HeroMetric value="RLS" label="Row-level isolation" />
-                <HeroMetric value="Private" label="Attachment bucket" />
+                <HeroMetric value="Private" label="By default" />
+                <HeroMetric value="Yours" label="Keys on your device" />
+                <HeroMetric value="Optional" label="AI when you want it" />
               </dl>
             </div>
 
@@ -125,26 +126,26 @@ export default function Home() {
                       <span className="size-2.5 rounded-full bg-emerald-400/90" />
                     </div>
                     <span className="flex-1 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      CipherSafe · encrypted thread
+                      {APP_NAME} · private thread
                     </span>
                     <Lock className="size-3.5 text-muted-foreground" aria-hidden />
                   </div>
                   <div className="space-y-4 p-4 pb-6">
-                    <PreviewBubble align="left" label="Peer · ciphertext" />
-                    <PreviewBubble align="right" label="You · opaque envelope" />
+                    <PreviewBubble align="left" label="Friend" />
+                    <PreviewBubble align="right" label="You" />
                     <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-2.5 text-center text-[11px] font-medium text-muted-foreground">
-                      Server sees blobs — not your words.
+                      Only your devices read the real messages.
                     </div>
                   </div>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 px-1 pb-1">
                   <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2.5 text-[11px] text-muted-foreground backdrop-blur-sm">
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">sync</span>
-                    <p className="mt-1 font-medium text-foreground">Realtime receipts</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Live</span>
+                    <p className="mt-1 font-medium text-foreground">Typing & delivery</p>
                   </div>
                   <div className="rounded-xl border border-border/50 bg-background/60 px-3 py-2.5 text-[11px] text-muted-foreground backdrop-blur-sm">
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-foreground/70">vault</span>
-                    <p className="mt-1 font-medium text-foreground">Keys in IndexedDB</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground/70">Lock</span>
+                    <p className="mt-1 font-medium text-foreground">PIN on this device</p>
                   </div>
                 </div>
               </div>
@@ -156,9 +157,9 @@ export default function Home() {
         <section className="border-t border-border/50 bg-muted/[0.35] py-16 lg:py-24">
           <div className="mx-auto max-w-6xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">
-              <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Designed like a security product, not a toy demo.</h2>
+              <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Thoughtful privacy, without the jargon.</h2>
               <p className="mt-4 text-muted-foreground md:text-lg">
-                Borrowing patterns from serious messengers and SaaS control planes — minimal chrome, explicit guarantees.
+                {APP_NAME} feels like a modern messenger — with an extra layer of care under the hood.
               </p>
             </div>
 
@@ -166,29 +167,28 @@ export default function Home() {
               <BentoCard
                 className="md:col-span-2 lg:col-span-2"
                 icon={Shield}
-                title="Server-blind storage"
-                description="Postgres rows carry ciphertext, nonces, and membership metadata. No plaintext_body column; no automatic AI on private threads."
-                footer="Supabase RLS + private attachment bucket"
+                title="We can’t read your chats"
+                description="What syncs is encrypted — not the words you see on screen. You stay in control of who can open them."
               />
               <BentoCard
                 icon={Fingerprint}
-                title="Verify identities"
-                description="Compare safety numbers out-of-band when you need confidence — same habit as Signal-style messengers."
+                title="Verified contacts"
+                description="Check safety numbers when it matters — so you know you’re talking to the right person."
               />
               <BentoCard
                 icon={Lock}
-                title="Local crypto vault"
-                description="Private keys stay wrapped in your browser storage. Unlock with your device passphrase; nothing equivalent ships to the API."
+                title="Only you hold the keys"
+                description="Your private keys stay on your device, protected by a PIN you choose."
               />
               <BentoCard
                 icon={BellOff}
-                title="Opt-in intelligence"
-                description="Mistral runs only when you explicitly invoke rewrite or analysis — never as a silent listener on normal sends."
+                title="AI is always optional"
+                description="Draft help runs only when you tap it — never in the background on normal sends."
               />
               <BentoCard
                 icon={Zap}
-                title="Realtime without leaking content"
-                description="Channels carry encrypted payloads and presence signals. Durable history stays ciphertext in the database."
+                title="Feels instant"
+                description="Smooth delivery and presence — without changing who can read your messages."
               />
             </div>
           </div>
@@ -206,7 +206,7 @@ export default function Home() {
                 </div>
                 <h3 className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">Open your inbox in under a minute.</h3>
                 <p className="mt-3 text-muted-foreground">
-                  Create an account, register this device&apos;s keys, and start a direct chat — all without trusting the sync layer with plaintext.
+                  Create an account, add this device, and message someone you trust — in minutes.
                 </p>
               </div>
               <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
@@ -226,7 +226,9 @@ export default function Home() {
 
         <footer className="border-t border-border/50 py-10">
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 text-sm text-muted-foreground md:flex-row lg:px-8">
-            <p className="text-center md:text-left">CipherSafe — privacy-first encrypted messenger prototype.</p>
+            <p className="text-center md:text-left">
+              {APP_NAME} — {TAGLINE}
+            </p>
             <div className="flex flex-wrap items-center justify-center gap-6">
               <Link href="/login" className="transition-colors hover:text-foreground">
                 Sign in
@@ -264,8 +266,8 @@ function PreviewBubble(props: { align: "left" | "right"; label: string }) {
         )}
       >
         <p className="font-medium">{props.label}</p>
-        <p className={cn("mt-1 font-mono text-[10px] tracking-wide", isRight ? "text-primary-foreground/75" : "text-muted-foreground")}>
-          U2FsdGVkX1… + nonce
+        <p className={cn("mt-1 text-[10px] tracking-wide opacity-80", isRight ? "text-primary-foreground/85" : "text-muted-foreground")}>
+          ··· ···
         </p>
       </div>
     </div>

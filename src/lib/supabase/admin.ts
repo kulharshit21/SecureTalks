@@ -14,7 +14,7 @@ export function createSupabaseAdminClient() {
 
   if (!url || !serviceRole) {
     throw new Error(
-      "[CipherSafe] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — admin client unavailable.",
+      "[Privyra] Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — admin client unavailable.",
     );
   }
 

@@ -90,12 +90,12 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthShell subtitle="Sign in to sync ciphertext — keys unlock separately on this device.">
+    <AuthShell subtitle="Sign in to pick up your conversations — your device PIN unlocks messages locally.">
       <Card className="w-full max-w-md border-border/60 bg-card/85 shadow-xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-500">
         <CardHeader className="space-y-2 px-8 pb-2 pt-8">
           <CardTitle className="text-2xl font-semibold tracking-tight">Welcome back</CardTitle>
           <CardDescription className="text-sm leading-relaxed">
-            Credentials stay with Supabase Auth. Message bodies remain ciphertext on the wire.
+            Your account is separate from your device lock — messages stay private on this browser after you sign in.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 px-8 pb-8">
@@ -145,6 +145,11 @@ export default function LoginPage() {
                 <Button className="h-11 w-full rounded-xl font-medium" type="submit" disabled={busy}>
                   Sign in
                 </Button>
+                <p className="text-center text-sm">
+                  <Link className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href="/forgot-password">
+                    Forgot password?
+                  </Link>
+                </p>
               </form>
             </TabsContent>
 

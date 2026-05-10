@@ -13,7 +13,7 @@ export function createBrowserSupabaseClient() {
   if ((!url || !anon) && process.env.NODE_ENV !== "production") {
     // Avoid crashing Next.js prerender/SSR when `.env.local` is not present yet.
     // Runtime chat features still require real Supabase credentials in the browser.
-    console.warn("[CipherSafe] Supabase browser env missing — using placeholders for build/prerender.");
+    console.warn("[Privyra] Supabase browser env missing — using placeholders for build/prerender.");
   }
 
   return createBrowserClient(resolvedUrl, resolvedAnon);

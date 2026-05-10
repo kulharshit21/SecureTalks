@@ -2,7 +2,7 @@
   "name": "securetalks",
   "version": "0.1.0",
   "private": true,
-  "description": "SecureTalks — privacy-first E2EE web messenger prototype: libsodium, ciphertext-only Supabase, encrypted attachments, disappearing timers, opt-in AI.",
+  "description": "Privyra (SecureTalks repo) — privacy-first E2EE web messenger: libsodium, ciphertext-only Supabase, encrypted attachments, disappearing timers, opt-in AI.",
   "keywords": [
     "e2ee",
     "encryption",

@@ -70,7 +70,7 @@ export default function SignupPage() {
   }
 
   return (
-    <AuthShell subtitle="Username for discovery — device encryption is configured inside the app.">
+    <AuthShell subtitle="Choose a username friends can search — you’ll secure this device inside the app.">
       <Card className="w-full max-w-md border-border/60 bg-card/85 shadow-xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-500">
         <CardHeader className="space-y-2 px-8 pb-2 pt-8">
           <CardTitle className="text-2xl font-semibold tracking-tight">Choose your username</CardTitle>
