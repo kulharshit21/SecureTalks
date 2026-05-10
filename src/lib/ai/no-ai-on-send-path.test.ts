@@ -25,8 +25,10 @@ describe("normal send/receive paths stay AI-free", () => {
     const sendAttach = sliceBetween(composer, "async function sendAttachmentMessage()", "async function onSubmit()");
     expect(sendText).not.toMatch(/callMistralProxy/);
     expect(sendText).not.toMatch(/\/api\/ai\/mistral/);
+    expect(sendText).not.toMatch(/mistral-ai-assist/);
     expect(sendAttach).not.toMatch(/callMistralProxy/);
     expect(sendAttach).not.toMatch(/\/api\/ai\/mistral/);
+    expect(sendAttach).not.toMatch(/mistral-ai-assist/);
   });
 
   it("chat-thread decrypt path does not reference Mistral proxy", () => {
@@ -34,6 +36,7 @@ describe("normal send/receive paths stay AI-free", () => {
     const decryptBlock = sliceBetween(thread, "async function decryptRow(row: WireMessage)", "async function refreshReceipts");
     expect(decryptBlock).not.toMatch(/callMistralProxy/);
     expect(decryptBlock).not.toMatch(/\/api\/ai\/mistral/);
+    expect(decryptBlock).not.toMatch(/mistral-ai-assist/);
   });
 
   it("encrypted attachment pipeline module does not reference Mistral", () => {

@@ -12,10 +12,14 @@
 3. Ensure Storage bucket **`encrypted-attachments`** exists (matches `ENCRYPTED_ATTACHMENTS_BUCKET` in the app); baseline migrations may create **`attachments`** — align bucket name with applied migrations. Bucket must be **private** (no public anonymous reads).
 4. Configure Auth **redirect URLs** for production origin (e.g. `https://your-app.vercel.app/auth/callback`).
 
-## 2. Expiry purge (recommended)
+## 2. Edge Functions & expiry jobs
 
-- Function **`purge_expired_messages()`** is granted to **`service_role`** only for cron/workers.
-- Schedule via **Supabase pg_cron** or an external worker that calls Supabase with the **service role** key — **never** expose this key as `NEXT_PUBLIC_*` or bundle it in the browser.
+Deploy **`mistral-ai-assist`**, **`security-audit`**, **`cleanup-expired-messages`** (`docs/EDGE_FUNCTIONS.md`). Set **`MISTRAL_API_KEY`** and optional **`CLEANUP_EXPIRED_SECRET`** as Edge secrets.
+
+- **`purge_expired_messages()`** — hard delete path (+ Storage) where migration grants `service_role`.
+- **`cleanup_expired_messages()`** — soft-delete (`deleted_at`) helper; **`cleanup-expired-messages`** Edge Function calls it with service role after auth/cron secret check.
+
+Schedule purge/cleanup via **pg_cron**, Supabase scheduler, or HTTP cron hitting Edge with **`x-cleanup-secret`**.
 
 ## 3. Next.js environment
 
@@ -26,11 +30,13 @@ Set on the host (Vercel → Settings → Environment Variables):
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Anon key **only** |
 | `NEXT_PUBLIC_APP_URL` | Yes (prod) | Canonical origin, e.g. `https://your-app.vercel.app` |
-| `MISTRAL_API_KEY` | No | Server-only; omit to disable AI routes |
+| `MISTRAL_API_KEY` | No | **Optional dev fallback** for `/api/ai/mistral` when `AI_PROXY_USE_NEXT_ROUTE=true` — production AI uses Edge secrets instead |
 | `MISTRAL_CHAT_MODEL` | No | Default in `.env.example` |
-| `AI_RATE_LIMIT_*` | No | In-memory limits per instance |
+| `AI_RATE_LIMIT_*` | No | In-memory limits per instance (Next fallback only) |
+| `AI_PROXY_USE_NEXT_ROUTE` | No | **`true` only for local dev** — enables gated Next AI/security routes |
+| `NEXT_PUBLIC_AI_USE_NEXT_FALLBACK` | No | **`true` only for local dev** — browser retries Next routes if Edge invoke fails |
 
-**Never** set `SUPABASE_SERVICE_ROLE_KEY` for the Next.js client bundle. If needed at all, restrict to server cron scripts outside this app’s browser surface.
+**Never** set `SUPABASE_SERVICE_ROLE_KEY` for the Next.js client bundle. Use **`server-only`** `src/lib/supabase/admin.ts` on the server when elevation is intentional.
 
 ### Vercel Analytics & Speed Insights
 
@@ -49,9 +55,9 @@ CI recommendation: run the same four checks on every PR.
 ## 5. Post-deploy checks
 
 - Log in; send message; confirm row in `messages` has ciphertext only.
-- Upload attachment; confirm Storage object is not raw file bytes.
-- Open `/security` — plaintext-named column count **0**, bucket checks consistent with private attachments.
-- Confirm AI routes return disabled/error without `MISTRAL_API_KEY` when AI is not desired.
+- Upload attachment; confirm Storage object is ciphertext-only under **`encrypted-attachments`**.
+- Open `/security` — plaintext-named column count **0**, audit JSON shows **`deployment_surface: supabase_edge`** when Edge deploy OK.
+- Invoke **`mistral-ai-assist`** without Mistral secret configured → expect safe disabled/error JSON (no stack traces with user content).
 
 ## 6. Dependency audits
 

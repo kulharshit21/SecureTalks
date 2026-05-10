@@ -17,7 +17,7 @@ CipherSafe is a **Next.js App Router** application that keeps messaging plaintex
    Wraps libsodium secret keys with AES‑G‑CM using a PBKDF2‑derived key from the **device PIN**. Persisted records live in **IndexedDB**, satisfying the “no localStorage private keys” constraint.
 
 5. **Realtime**  
-   - **Postgres Changes** on `messages`, `message_receipts`, `conversation_members` deliver ciphertext/events to authorized members only (RLS‑aware Realtime).  
+   - **Postgres Changes** on `messages`, `message_recipients`, `conversation_members` deliver ciphertext/events to authorized members only (RLS‑aware Realtime).  
    - **Broadcast** channels (`conversation:{uuid}`) carry typing indicators (no plaintext payloads).  
    - **Presence** channel (`cipher-online`) emits lightweight heartbeat metadata for future UX (Phase&nbsp;1 focuses on plumbing).
 

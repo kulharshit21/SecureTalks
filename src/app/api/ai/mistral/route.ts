@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 
 import { checkAiRateLimit } from "@/lib/ai/rate-limit";
-import { systemPromptForPurpose } from "@/lib/ai/mistral-prompts";
+import { systemPromptForAction } from "@/lib/ai/mistral-prompts";
 import { validateMistralProxyBody } from "@/lib/ai/validate-request";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+
+/**
+ * Dev-only fallback when Edge Functions are not deployed locally.
+ * Production: leave unset — clients use `supabase.functions.invoke("mistral-ai-assist")`.
+ */
+function devFallbackEnabled(): boolean {
+  return process.env.AI_PROXY_USE_NEXT_ROUTE === "true";
+}
 
 function parseRateEnv(): { windowMs: number; maxInWindow: number } {
   const windowMs = Number(process.env.AI_RATE_LIMIT_WINDOW_MS ?? 900_000);
@@ -17,6 +25,16 @@ function parseRateEnv(): { windowMs: number; maxInWindow: number } {
 }
 
 export async function POST(req: Request) {
+  if (!devFallbackEnabled()) {
+    return NextResponse.json(
+      {
+        error:
+          "Next.js Mistral proxy disabled. Deploy mistral-ai-assist Edge Function and invoke from the client, or set AI_PROXY_USE_NEXT_ROUTE=true for local dev only.",
+      },
+      { status: 410 },
+    );
+  }
+
   /**
    * Invariants (golden rule — see SECURITY_CLAIMS.md):
    * - Never persist user payloads or completions to Postgres, logs, or Redis from this handler.
@@ -54,9 +72,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
   }
 
-  const { purpose, payload } = validated.body;
+  const { action, payload, variant } = validated.body;
   const model = process.env.MISTRAL_CHAT_MODEL?.trim() || "mistral-large-latest";
-  const system = systemPromptForPurpose(purpose);
+  const system = systemPromptForAction(action, variant);
 
   /** Do not log prompts or completions — avoids accidental PII in server logs. */
   const upstream = await fetch("https://api.mistral.ai/v1/chat/completions", {

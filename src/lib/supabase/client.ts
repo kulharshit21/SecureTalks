@@ -2,9 +2,10 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 
+import { getClientPublicEnv } from "@/lib/env/client";
+
 export function createBrowserSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
+  const { supabaseUrl: url, supabaseAnonKey: anon } = getClientPublicEnv();
 
   const resolvedUrl = url.length > 0 ? url : "http://127.0.0.1:54321";
   const resolvedAnon = anon.length > 0 ? anon : "public-anon-key-placeholder";

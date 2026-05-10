@@ -76,7 +76,7 @@ export function MessageComposer(props: {
     runWithAiConsent(async () => {
       setBusy(true);
       try {
-        const out = await callMistralProxy({ purpose: "rewrite_draft", payload: trimmed });
+        const out = await callMistralProxy(supabase, { action: "rewrite_draft", payload: trimmed });
         if ("error" in out) {
           toast.error(out.error);
           return;
@@ -99,7 +99,11 @@ export function MessageComposer(props: {
     runWithAiConsent(async () => {
       setBusy(true);
       try {
-        const out = await callMistralProxy({ purpose: "smart_reply_context", payload });
+        const out = await callMistralProxy(supabase, {
+          action: "summarize_selected",
+          payload,
+          variant: "reply_suggestion",
+        });
         if ("error" in out) {
           toast.error(out.error);
           return;

@@ -1,17 +1,35 @@
-import { AI_MAX_PAYLOAD_CHARS, type AiPurpose, isAiPurpose } from "@/lib/ai/types";
+import {
+  AI_MAX_PAYLOAD_CHARS,
+  type AiAction,
+  type AiSummarizeVariant,
+  isAiAction,
+  isAiSummarizeVariant,
+} from "@/lib/ai/types";
 
-export type ValidatedBody = { purpose: AiPurpose; payload: string };
+export type ValidatedEdgeBody = {
+  action: AiAction;
+  payload: string;
+  explicitConsent: true;
+  variant?: AiSummarizeVariant;
+};
 
-export function validateMistralProxyBody(input: unknown): { ok: true; body: ValidatedBody } | { ok: false; error: string } {
+export function validateMistralProxyBody(
+  input: unknown,
+): { ok: true; body: ValidatedEdgeBody } | { ok: false; error: string } {
   if (!input || typeof input !== "object") {
     return { ok: false, error: "Invalid JSON body." };
   }
   const o = input as Record<string, unknown>;
-  const purpose = o.purpose;
+  const action = o.action;
   const payload = o.payload;
+  const explicitConsent = o.explicitConsent;
+  const variant = o.variant;
 
-  if (!isAiPurpose(purpose)) {
-    return { ok: false, error: "Unknown or missing purpose." };
+  if (!isAiAction(action)) {
+    return { ok: false, error: "Unknown or missing action." };
+  }
+  if (explicitConsent !== true) {
+    return { ok: false, error: "explicitConsent must be true." };
   }
   if (typeof payload !== "string") {
     return { ok: false, error: "Payload must be a string." };
@@ -23,5 +41,14 @@ export function validateMistralProxyBody(input: unknown): { ok: true; body: Vali
     return { ok: false, error: "Payload too large." };
   }
 
-  return { ok: true, body: { purpose, payload } };
+  if (variant !== undefined) {
+    if (action !== "summarize_selected") {
+      return { ok: false, error: "variant is only allowed for summarize_selected." };
+    }
+    if (!isAiSummarizeVariant(variant)) {
+      return { ok: false, error: "Invalid summarize variant." };
+    }
+  }
+
+  return { ok: true, body: { action, payload, explicitConsent: true, ...(variant ? { variant } : {}) } };
 }

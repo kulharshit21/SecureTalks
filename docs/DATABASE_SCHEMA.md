@@ -1,72 +1,54 @@
 # Database schema overview
 
-Authoritative SQL lives in `supabase/migrations/20260511120000_ciphersafe_schema.sql` and follow-ons such as `20260516120000_group_chat_foundation.sql`. Below is a conceptual map for engineers.
+Authoritative SQL lives under `supabase/migrations/*`. Earlier CipherSafe files coexist with **Privyra backend** migrations (`20260522100000_*`, `20260522110000_*`). The **running app** in this repo targets **`message_recipients`**, **`encrypted-attachments`**, and related Privyra-shaped tables.
 
-## Entities
+## Entities (conceptual)
 
-### `profiles`
+### `profiles` / `user_settings`
 
-Public-facing attributes (`username`, `display_name`, `avatar_url`). Used for discovery — never stores secrets.
+Public profile fields and UX toggles — no secrets.
 
-### `devices`
+### `devices` / `one_time_prekeys`
 
-Per-user device rows (`label`, `last_seen_at`). Links user ↔ messaging endpoint hardware/software.
-
-### `public_key_bundles`
-
-One row per device containing **only public key material** (`identity_public_key` base64). Future pre-keys would extend this table without renaming.
+Published DH / signing / pre-key material **only**. Private keys stay client-side.
 
 ### `conversations` / `conversation_members`
 
-Conversation shells plus membership graph. `last_read_message_id` tracks read pointers (metadata only).
+Conversation shells + membership (`role`, `left_at`, …).
 
 ### `messages`
 
-Stores encrypted payloads:
+Client-encrypted payloads (**ciphertext**, **nonce**, **algorithm**, structured associated data).  
+Do **not** add plaintext body columns (`body`, `content`, `text`, `plaintext_preview`, …).
 
-| Column | Purpose |
-| ------ | ------- |
-| `ciphertext` | Base64 libsodium box ciphertext |
-| `nonce` | Base64 nonce |
-| `sender_device_id` | FK to emitting device |
-| `content_type` | `text` or `attachment` marker |
+### `message_recipients` (canonical for current client)
 
-**Never** add plaintext columns without revisiting the entire compliance story.
-
-### `message_receipts`
-
-Composite primary key `(message_id, user_id)` with `status ∈ {sent,delivered,read}`.
-
-Sender `sent` receipt is inserted automatically via trigger when a message row is created.
+Per-recipient delivery/read matrix used by `chat-thread.tsx` (`recipient_user_id`, `delivered_at`, `read_at`).  
+Older migrations may still define **`message_receipts`** — legacy name only.
 
 ### `attachments`
 
-Metadata linking ciphertext blobs inside Storage (`storage_path`, integrity hash placeholder).
+Metadata for ciphertext objects in Storage; **`storage_bucket`** defaults to **`encrypted-attachments`**; **`storage_path`** pattern `${conversation_id}/${message_id}/${attachment_id}.bin`.
 
-### `group_session_epochs`
+### Group MVP tables
 
-Per-group symmetric epochs (`conversation_id`, `epoch`, `created_by_device_id`). Stores **no raw keys** — clients derive epoch secrets after decrypting pairwise wraps.
-
-### `group_key_wraps`
-
-Pairwise ciphertext (`ciphertext`, `nonce`, `associated_data`) wrapping the epoch symmetric key for `(recipient_device_id, epoch)`. Enables MVP group messaging without plaintext key material on Supabase.
+`group_session_epochs`, `group_key_wraps` — ciphertext-only server payloads.
 
 ### `security_events`
 
-Structured JSON audit entries without bodies (e.g., `device_registered`).
+Structured audit metadata (`metadata` JSON — naming varies by migration generation).
 
 ## RPC helpers
 
-- `create_direct_conversation(peer_user_id uuid)` — SECURITY DEFINER helper that inserts both membership rows atomically under RLS elevation.
-- `create_group(title text, member_user_ids uuid[])` — creates `conversation_kind='group'`, seeds membership (`admin` caller, `member` peers).
-- `group_add_member(conversation_id uuid, target_user_id uuid)` — admin-only membership insert with duplicate guards.
-- `group_remove_member(conversation_id uuid, target_user_id uuid)` — admin removes member or self-leave path.
-- `security_audit_snapshot()` — aggregated posture for `/security` (RLS flags, plaintext-column probes on `messages`, storage bucket ACL hints). Added in `supabase/migrations/20260516120000_group_chat_foundation.sql`.
+- `create_direct_conversation`, `create_group`, membership mutators — SECURITY DEFINER.
+- `security_audit_snapshot()` — posture JSON for `/security`.
+- `cleanup_expired_messages()` — soft-expiry helper (`service_role`).
+- `purge_expired_messages()` — destructive purge path for TTL+ciphertext blobs where enabled.
 
-## Storage policies
+## Storage
 
-Bucket `attachments` requires conversation membership join before `SELECT`, and path-prefix ownership (`auth.uid()` folder) for mutation operations.
+Bucket **`encrypted-attachments`** (private). Policies require membership / attachment-row linkage — see migrations (`encrypted_attachments_*` policies).
 
-## Realtime publication
+## Realtime
 
-Migrations add tables to `supabase_realtime` so authorized clients receive ciphertext inserts (including `group_session_epochs` / `group_key_wraps` where enabled) without polling.
+`supabase_realtime` publication includes messaging surfaces per migrations (see `REALTIME_MODEL.md`).

@@ -27,7 +27,7 @@
 
 ## Snapshot
 
-SecureTalks is a **prototype** web messenger: plaintext stays in an **unlocked browser session**; **Supabase** holds **ciphertext**, AEAD metadata, and **encrypted** Storage blobs. **Attachments** (encrypt-then-upload) are implemented for **direct** chats only — group attach is explicitly **incomplete** in UI. **Disappearing messages** use `expires_at`, **RLS**, and **`purge_expired_messages()`**. **Group chat** is a small-team MVP (symmetric epochs — **not MLS**). **Mistral-backed helpers** are **opt-in** and leave the E2EE boundary; they never run on the normal send/decrypt path.
+**Privyra / SecureTalks** is a **privacy-first encrypted messaging prototype**: plaintext stays in an **unlocked browser session**; **Supabase** holds **ciphertext**, AEAD metadata, and **encrypted** Storage blobs. **Attachments** (encrypt-then-upload) use the private **`encrypted-attachments`** bucket for **direct** chats — group attach remains **incomplete** in UI. **Disappearing messages** combine `expires_at`, **RLS**, **`purge_expired_messages()`**, and **`cleanup_expired_messages()`**. **Group chat** is a small-team MVP (symmetric epochs — **not MLS**). **Opt-in AI** runs only via **`mistral-ai-assist` Edge Function** (Next proxy disabled by default); normal send/decrypt never calls AI.
 
 **Docs:** `SECURITY_CLAIMS.md` · `LIMITATIONS.md` · `DEPLOYMENT.md` · `DEMO_SCRIPT.md` · `docs/THREAT_MODEL.md` · `docs/SECURITY_MODEL.md`
 

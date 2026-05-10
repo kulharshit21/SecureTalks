@@ -21,7 +21,7 @@ Prefer correctness and regression tests over marketing copy.
 | **Encrypted attachments (direct chats)** | Files are AEAD-encrypted client-side before upload; Storage holds ciphertext; DB holds wrapped file keys / manifest metadata. **Group chats:** attachment pipeline not implemented — UI disables attach and labels incomplete. | `encryptAttachmentPlaintext` → `sendEncryptedAttachmentMessage`; `send-encrypted-attachment.test.ts`; `message-composer.tsx`. |
 | **Identity verification UX** | Users can compare fingerprints / verify peer bundles before trusting decryption display. | Verification modal + thread flows (see UI components). |
 | **Disappearing messages** | TTL via `expires_at` + RLS filtering expired rows + purge RPC for cleanup. | Migrations (`purge_expired_messages`); docs in README. |
-| **Opt-in AI** | Mistral is only invoked from explicit UI actions (rewrite / smart reply / export dialogs), not from normal send/decrypt. | `callMistralProxy` usage confined to those handlers; `no-ai-on-send-path.test.ts`. |
+| **Opt-in AI** | Mistral only via **`mistral-ai-assist` Edge Function** (`functions.invoke`) after explicit UI + consent; Next `/api/ai/mistral` fallback gated off in production. | `callMistralProxy` + `no-ai-on-send-path.test.ts` + `ai-edge-contract.test.ts`. |
 | **Group MVP crypto** | Symmetric epoch keys, pairwise-wrapped to members — **not** MLS / not audited large-group protocol. | `docs/GROUP_E2EE_MVP.md`, `docs/SECURITY_MODEL.md`. |
 
 ## Explicit non-claims
@@ -53,7 +53,7 @@ Manual / repo audit:
 4. **`.env` gitignored** — `.gitignore` uses `.env*` with `!.env.example`.
 5. **`.env.example` safe** — Placeholders only; documents server-only `MISTRAL_API_KEY` (never `NEXT_PUBLIC_*`).
 6. **Service role not on client** — Browser/server helpers use `NEXT_PUBLIC_SUPABASE_*` anon key only. `service_role` appears in SQL migrations (e.g. `GRANT EXECUTE … TO service_role` for cron workers), not in application client code.
-7. **RLS on sensitive tables** — Policies exist for `profiles`, `devices`, `one_time_prekeys`, `conversations`, `conversation_members`, `messages`, `message_receipts`, `attachments`, `security_events`, `group_session_epochs`, `group_key_wraps`, plus Storage policies on `attachments` bucket paths. See `docs/SECURITY_RLS_CHECKLIST.md` and migrations under `supabase/migrations/`.
+7. **RLS on sensitive tables** — Policies exist for `profiles`, `devices`, `one_time_prekeys`, `conversations`, `conversation_members`, `messages`, `message_recipients` (current app reads this matrix), legacy migrations may still define `message_receipts`, `attachments`, `security_events`, `group_session_epochs`, `group_key_wraps`, plus Storage policies on **encrypted-attachments** bucket paths. See `docs/SECURITY_AUDIT_CHECKLIST.md` and migrations under `supabase/migrations/`.
 8. **Private keys never sent to Supabase** — Device registration inserts **public** DH/signing/prekey material into `devices` / `one_time_prekeys`. Wrapped private bundle lives in **IndexedDB** (`device-vault.ts`), not uploaded as plaintext.
 9. **Attachment encrypt-before-upload** — `sendEncryptedAttachmentMessage` encrypts bytes then uploads ciphertext via XHR (`send-encrypted-attachment.ts` + test). **Direct chats only**; group composer disables attach and labels the gap.
 10. **README positioning** — Does not claim superiority vs WhatsApp without audit; describes prototype / honest threat model.

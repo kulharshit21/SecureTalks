@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AiConsentDialog } from "@/components/chat/ai-consent-dialog";
+import { useSupabase } from "@/components/providers/supabase-provider";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +25,7 @@ function AiSummarizeExportMounted(props: {
   onConsentGranted: () => void;
   onRequestClose: () => void;
 }) {
+  const supabase = useSupabase();
   const [consentOpen, setConsentOpen] = useState(false);
   const [draft, setDraft] = useState(props.initialExportText);
   const [busy, setBusy] = useState(false);
@@ -41,7 +43,11 @@ function AiSummarizeExportMounted(props: {
     }
     setBusy(true);
     try {
-      const out = await callMistralProxy({ purpose: "summarize_export", payload: trimmed });
+      const out = await callMistralProxy(supabase, {
+        action: "summarize_selected",
+        payload: trimmed,
+        variant: "summary",
+      });
       if ("error" in out) {
         toast.error(out.error);
         return;
@@ -130,6 +136,7 @@ function AiReportAnalysisMounted(props: {
   onConsentGranted: () => void;
   onRequestClose: () => void;
 }) {
+  const supabase = useSupabase();
   const [consentOpen, setConsentOpen] = useState(false);
   const [draft, setDraft] = useState(props.reportedSnippet);
   const [busy, setBusy] = useState(false);
@@ -144,7 +151,7 @@ function AiReportAnalysisMounted(props: {
     if (trimmed.length === 0) return;
     setBusy(true);
     try {
-      const out = await callMistralProxy({ purpose: "report_analysis", payload: trimmed });
+      const out = await callMistralProxy(supabase, { action: "analyze_reported", payload: trimmed });
       if ("error" in out) {
         toast.error(out.error);
         return;

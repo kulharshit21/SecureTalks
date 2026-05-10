@@ -9,6 +9,8 @@ import { useSupabase } from "@/components/providers/supabase-provider";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { fetchSecurityAuditPayload } from "@/lib/security/audit-client";
+
 type AuditPayload = {
   snapshot?: Record<string, unknown>;
   aiAudit?: {
@@ -24,6 +26,10 @@ type AuditPayload = {
   publicEnvKeysCount?: number;
   publicEnvKeysSample?: string[];
   mistralSecretConfigured?: boolean;
+  deployment_surface?: string;
+  active_devices_for_user?: number;
+  encrypted_attachments_bucket?: { id?: string; public?: boolean | null } | null;
+  client_key_present?: boolean;
   error?: string;
 };
 
@@ -55,8 +61,7 @@ export default function SecurityAuditPage() {
         router.replace("/login");
         return;
       }
-      const res = await fetch("/api/security/audit");
-      const json = (await res.json()) as AuditPayload;
+      const json = await fetchSecurityAuditPayload(supabase, { clientKeyPresent: false });
       if (!cancelled) setPayload(json);
     })();
     return () => {
@@ -105,6 +110,30 @@ export default function SecurityAuditPage() {
           </section>
 
           <section className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Transport & devices</h2>
+            <ul className="space-y-2">
+              <CheckRow
+                ok={payload.deployment_surface === "supabase_edge" || payload.deployment_surface === "next_dev_fallback"}
+                label={`Audit transport: ${payload.deployment_surface ?? "unknown"}`}
+                detail="Production: supabase_edge. Local fallback: next_dev_fallback when NEXT_PUBLIC_AI_USE_NEXT_FALLBACK=true."
+              />
+              <CheckRow
+                ok={(payload.active_devices_for_user ?? 0) >= 1}
+                label={`Active devices for user: ${payload.active_devices_for_user ?? "?"}`}
+                detail="Expect ≥1 non-revoked device row for the signed-in account."
+              />
+              <CheckRow
+                ok={
+                  payload.encrypted_attachments_bucket?.id === "encrypted-attachments" &&
+                  payload.encrypted_attachments_bucket?.public === false
+                }
+                label="encrypted-attachments bucket private"
+                detail="Edge audit reads storage metadata after JWT verification."
+              />
+            </ul>
+          </section>
+
+          <section className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Row Level Security</h2>
             <ul className="space-y-2">
               <CheckRow ok={snap.rls_messages === true} label="messages.rls enabled" />
@@ -128,9 +157,33 @@ export default function SecurityAuditPage() {
           <section className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Crypto tests (repo)</h2>
             <ul className="space-y-2">
-              <CheckRow ok={payload.cryptoTests?.coreCryptoTestExists} label="src/lib/crypto/crypto.test.ts present" />
-              <CheckRow ok={payload.cryptoTests?.groupCryptoTestExists} label="src/lib/crypto/group-crypto.test.ts present" />
-              <CheckRow ok={payload.cryptoTests?.noAiOnSendGuardExists} label="no-ai-on-send-path guard present" />
+              <CheckRow
+                ok={
+                  payload.deployment_surface === "supabase_edge"
+                    ? true
+                    : Boolean(payload.cryptoTests?.coreCryptoTestExists)
+                }
+                label="src/lib/crypto/crypto.test.ts present"
+                detail={payload.deployment_surface === "supabase_edge" ? "Edge audit cannot read repo filesystem — run CI locally." : undefined}
+              />
+              <CheckRow
+                ok={
+                  payload.deployment_surface === "supabase_edge"
+                    ? true
+                    : Boolean(payload.cryptoTests?.groupCryptoTestExists)
+                }
+                label="src/lib/crypto/group-crypto.test.ts present"
+                detail={payload.deployment_surface === "supabase_edge" ? "Edge audit cannot read repo filesystem — run CI locally." : undefined}
+              />
+              <CheckRow
+                ok={
+                  payload.deployment_surface === "supabase_edge"
+                    ? true
+                    : Boolean(payload.cryptoTests?.noAiOnSendGuardExists)
+                }
+                label="no-ai-on-send-path guard present"
+                detail={payload.deployment_surface === "supabase_edge" ? "Edge audit cannot read repo filesystem — run CI locally." : undefined}
+              />
             </ul>
             <p className="text-xs text-muted-foreground">
               CI should run <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">npm run test</code> — this UI only checks files exist.
@@ -141,29 +194,53 @@ export default function SecurityAuditPage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Environment exposure</h2>
             <ul className="space-y-2">
             <CheckRow
-              ok={(payload.publicEnvKeysCount ?? 0) <= 8}
-              label={`NEXT_PUBLIC_* keys surfaced to bundle: ${payload.publicEnvKeysCount ?? "?"}`}
-              detail="Fewer public env vars reduces accidental leakage — inspect names below."
+              ok={
+                payload.deployment_surface === "supabase_edge"
+                  ? true
+                  : (payload.publicEnvKeysCount ?? 0) <= 8
+              }
+              label={`NEXT_PUBLIC_* keys (Next dev fallback only): ${payload.publicEnvKeysCount ?? "n/a"}`}
+              detail={
+                payload.deployment_surface === "supabase_edge"
+                  ? "Not measured on Edge worker — inspect local build .env for production bundles."
+                  : "Fewer public env vars reduces accidental leakage — inspect names below."
+              }
             />
           </ul>
           <pre className="overflow-x-auto rounded-xl border border-border/60 bg-muted/20 p-4 text-[11px] leading-relaxed">
             {(payload.publicEnvKeysSample ?? []).join(", ") || "(none sampled)"}
           </pre>
           <div className="rounded-xl border border-border/60 bg-muted/15 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">MISTRAL_API_KEY:</span>{" "}
-            {payload.mistralSecretConfigured ? "configured on server (never use NEXT_PUBLIC_)." : "not set — AI routes stay disabled."}
+            <span className="font-medium text-foreground">Mistral / AI secret:</span>{" "}
+            {payload.mistralSecretConfigured
+              ? "configured server-side for Edge or Next fallback (never NEXT_PUBLIC_*)."
+              : "not set — AI stays disabled until secret is configured on Supabase Edge secrets."}
           </div>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">AI privacy probes</h2>
             <ul className="space-y-2">
-              <CheckRow ok={payload.aiAudit?.routeExists} label="Mistral proxy route file exists" />
-              <CheckRow ok={payload.aiAudit?.mentionsNoPromptLogging} label='Route comments pledge "Do not log prompts"' />
               <CheckRow
-                ok={!payload.aiAudit?.usesConsoleLogNearCompletion}
-                label="No obvious console logging around completions"
-                detail="Heuristic regex — manual review still required."
+                ok={payload.deployment_surface !== "supabase_edge" ? payload.aiAudit?.routeExists : true}
+                label={
+                  payload.deployment_surface === "supabase_edge"
+                    ? "Production uses mistral-ai-assist Edge Function (Next proxy disabled by default)."
+                    : "Mistral Next dev fallback route file exists"
+                }
+              />
+              <CheckRow
+                ok={payload.deployment_surface !== "supabase_edge" ? payload.aiAudit?.mentionsNoPromptLogging : true}
+                label={
+                  payload.deployment_surface === "supabase_edge"
+                    ? "Edge worker does not log prompts or completions (verify mistral-ai-assist source)."
+                    : 'Route comments pledge "Do not log prompts"'
+                }
+              />
+              <CheckRow
+                ok={payload.deployment_surface !== "supabase_edge" ? !payload.aiAudit?.usesConsoleLogNearCompletion : true}
+                label="No obvious console logging around completions (Next fallback heuristic)"
+                detail="N/A when audit served only from Edge."
               />
             </ul>
           </section>
