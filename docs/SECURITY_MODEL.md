@@ -1,5 +1,7 @@
 # Security model
 
+**Production AI + audit surfaces use Supabase Edge Functions** (`mistral-ai-assist`, `security-audit`) so Mistral secrets never ship in the Next bundle. Next `/api/*` proxies stay **off** unless `AI_PROXY_USE_NEXT_ROUTE=true` (local dev).
+
 This document states **what CipherSafe Phase&nbsp;1 protects, what it does not, and where honesty matters.**
 
 ## Guarantees (relative to the MVP design)
