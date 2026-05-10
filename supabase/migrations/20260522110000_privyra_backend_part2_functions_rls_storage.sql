@@ -140,6 +140,7 @@ $$;
 -- -----------------------------------------------------------------------------
 -- Direct conversation RPC (dedup symmetric pair)
 -- -----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.create_direct_conversation(UUID);
 CREATE OR REPLACE FUNCTION public.create_direct_conversation(other_user_id UUID)
 RETURNS UUID
 LANGUAGE plpgsql

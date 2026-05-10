@@ -16,6 +16,16 @@ DROP POLICY IF EXISTS devices_insert_own ON public.devices;
 DROP POLICY IF EXISTS devices_update_own ON public.devices;
 DROP POLICY IF EXISTS devices_delete_own ON public.devices;
 
+-- Phase 1 bundle table; required for DROP POLICY / backfill / DROP TABLE below. Some remotes were
+-- repaired or created without this table while still running later migrations.
+CREATE TABLE IF NOT EXISTS public.public_key_bundles (
+  device_id UUID PRIMARY KEY REFERENCES public.devices (id) ON DELETE CASCADE,
+  identity_public_key TEXT NOT NULL,
+  signing_public_key TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT identity_public_key_nonempty CHECK (char_length(identity_public_key) > 0)
+);
+
 DROP POLICY IF EXISTS pkb_select_authenticated ON public.public_key_bundles;
 DROP POLICY IF EXISTS pkb_insert_own_device ON public.public_key_bundles;
 DROP POLICY IF EXISTS pkb_update_own_device ON public.public_key_bundles;
@@ -30,6 +40,33 @@ DROP POLICY IF EXISTS cm_update_own_membership ON public.conversation_members;
 DROP POLICY IF EXISTS messages_select_member ON public.messages;
 DROP POLICY IF EXISTS messages_insert_sender_member ON public.messages;
 
+-- Phase 1 tables required before DROP POLICY (PostgreSQL errors if relation missing).
+CREATE TABLE IF NOT EXISTS public.message_receipts (
+  message_id UUID NOT NULL REFERENCES public.messages (id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('sent', 'delivered', 'read')),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.attachments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES public.messages (id) ON DELETE CASCADE,
+  storage_path TEXT NOT NULL UNIQUE,
+  ciphertext_sha256 TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.security_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users (id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 DROP POLICY IF EXISTS receipts_select_member ON public.message_receipts;
 DROP POLICY IF EXISTS receipts_insert_self_member ON public.message_receipts;
 DROP POLICY IF EXISTS receipts_update_own_member ON public.message_receipts;
@@ -43,7 +80,19 @@ DROP POLICY IF EXISTS security_events_insert_own ON public.security_events;
 -- -----------------------------------------------------------------------------
 -- 1) Devices: normalize key material onto device rows (no private keys ever)
 -- -----------------------------------------------------------------------------
-ALTER TABLE public.devices RENAME COLUMN label TO device_name;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = 'devices' AND c.column_name = 'label'
+  )
+   AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = 'devices' AND c.column_name = 'device_name'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.devices RENAME COLUMN label TO device_name';
+  END IF;
+END $$;
 
 ALTER TABLE public.devices
   ADD COLUMN IF NOT EXISTS device_type TEXT NOT NULL DEFAULT 'web',
@@ -94,19 +143,100 @@ BEGIN
   END IF;
 END$$;
 
-ALTER TABLE public.devices
-  ALTER COLUMN identity_public_key SET NOT NULL,
-  ALTER COLUMN identity_signing_public_key SET NOT NULL,
-  ALTER COLUMN signed_prekey_key_id SET NOT NULL,
-  ALTER COLUMN signed_prekey_public SET NOT NULL,
-  ALTER COLUMN signed_prekey_signature SET NOT NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='devices' AND column_name='identity_public_key' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.devices ALTER COLUMN identity_public_key SET NOT NULL;
+  END IF;
+END $$;
 
-ALTER TABLE public.devices
-  ADD CONSTRAINT devices_identity_public_key_nonempty CHECK (char_length(identity_public_key) > 0),
-  ADD CONSTRAINT devices_identity_signing_nonempty CHECK (char_length(identity_signing_public_key) > 0),
-  ADD CONSTRAINT devices_signed_prekey_public_nonempty CHECK (char_length(signed_prekey_public) > 0),
-  ADD CONSTRAINT devices_signed_prekey_signature_nonempty CHECK (char_length(signed_prekey_signature) > 0),
-  ADD CONSTRAINT devices_signed_prekey_key_id_nonempty CHECK (char_length(signed_prekey_key_id) > 0);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='devices' AND column_name='identity_signing_public_key' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.devices ALTER COLUMN identity_signing_public_key SET NOT NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='devices' AND column_name='signed_prekey_key_id' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.devices ALTER COLUMN signed_prekey_key_id SET NOT NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='devices' AND column_name='signed_prekey_public' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.devices ALTER COLUMN signed_prekey_public SET NOT NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='devices' AND column_name='signed_prekey_signature' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.devices ALTER COLUMN signed_prekey_signature SET NOT NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class r ON r.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+    WHERE n.nspname = 'public' AND r.relname = 'devices' AND c.conname = 'devices_identity_public_key_nonempty'
+  ) THEN
+    ALTER TABLE public.devices ADD CONSTRAINT devices_identity_public_key_nonempty CHECK (char_length(identity_public_key) > 0);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class r ON r.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+    WHERE n.nspname = 'public' AND r.relname = 'devices' AND c.conname = 'devices_identity_signing_nonempty'
+  ) THEN
+    ALTER TABLE public.devices ADD CONSTRAINT devices_identity_signing_nonempty CHECK (char_length(identity_signing_public_key) > 0);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class r ON r.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+    WHERE n.nspname = 'public' AND r.relname = 'devices' AND c.conname = 'devices_signed_prekey_public_nonempty'
+  ) THEN
+    ALTER TABLE public.devices ADD CONSTRAINT devices_signed_prekey_public_nonempty CHECK (char_length(signed_prekey_public) > 0);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class r ON r.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+    WHERE n.nspname = 'public' AND r.relname = 'devices' AND c.conname = 'devices_signed_prekey_signature_nonempty'
+  ) THEN
+    ALTER TABLE public.devices ADD CONSTRAINT devices_signed_prekey_signature_nonempty CHECK (char_length(signed_prekey_signature) > 0);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class r ON r.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+    WHERE n.nspname = 'public' AND r.relname = 'devices' AND c.conname = 'devices_signed_prekey_key_id_nonempty'
+  ) THEN
+    ALTER TABLE public.devices ADD CONSTRAINT devices_signed_prekey_key_id_nonempty CHECK (char_length(signed_prekey_key_id) > 0);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS devices_user_active_idx
   ON public.devices (user_id)
@@ -147,17 +277,42 @@ LATERAL jsonb_array_elements((b.identity_public_key::jsonb)->'oneTimePreKeys') A
 WHERE b.identity_public_key ~ '^\s*\{'
 ON CONFLICT (device_id, key_id) DO NOTHING;
 
-DROP TABLE public.public_key_bundles;
+DROP TABLE IF EXISTS public.public_key_bundles;
 
 -- -----------------------------------------------------------------------------
 -- 3) Conversations: rename kind → type, allow group, maintain updated_at
 -- -----------------------------------------------------------------------------
-ALTER TABLE public.conversations RENAME COLUMN kind TO type;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = 'conversations' AND c.column_name = 'kind'
+  )
+   AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = 'conversations' AND c.column_name = 'type'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.conversations RENAME COLUMN kind TO type';
+  END IF;
+END $$;
 
 ALTER TABLE public.conversations DROP CONSTRAINT IF EXISTS conversations_kind_check;
 
-ALTER TABLE public.conversations
-  ADD CONSTRAINT conversations_type_check CHECK (type IN ('direct', 'group'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class r ON r.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+    WHERE n.nspname = 'public'
+      AND r.relname = 'conversations'
+      AND c.conname = 'conversations_type_check'
+  ) THEN
+    ALTER TABLE public.conversations
+      ADD CONSTRAINT conversations_type_check CHECK (type IN ('direct', 'group'));
+  END IF;
+END $$;
 
 UPDATE public.conversations SET type = 'direct' WHERE type IS NULL OR type NOT IN ('direct', 'group');
 
@@ -217,7 +372,13 @@ SET sender_id = d.user_id
 FROM public.devices d
 WHERE d.id = m.sender_device_id AND m.sender_id IS NULL;
 
-ALTER TABLE public.messages ALTER COLUMN sender_id SET NOT NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='messages' AND column_name='sender_id' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.messages ALTER COLUMN sender_id SET NOT NULL;
+  END IF;
+END $$;
 
 DO $$
 BEGIN
@@ -247,8 +408,16 @@ ALTER TABLE public.messages DROP COLUMN IF EXISTS aad_timestamp_ms;
 
 ALTER TABLE public.messages DROP COLUMN IF EXISTS content_type;
 
-ALTER TABLE public.messages
-  ADD CONSTRAINT messages_algorithm_nonempty CHECK (char_length(algorithm) > 0);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_catalog.pg_constraint c
+    JOIN pg_catalog.pg_class r ON r.oid = c.conrelid
+    JOIN pg_catalog.pg_namespace n ON n.oid = r.relnamespace
+    WHERE n.nspname = 'public' AND r.relname = 'messages' AND c.conname = 'messages_algorithm_nonempty'
+  ) THEN
+    ALTER TABLE public.messages ADD CONSTRAINT messages_algorithm_nonempty CHECK (char_length(algorithm) > 0);
+  END IF;
+END $$;
 
 COMMENT ON COLUMN public.messages.associated_data IS 'Authenticated associated data bound into AEAD on client (JSON). Never stores plaintext body.';
 COMMENT ON COLUMN public.messages.deleted_at IS 'Soft-delete marker; ciphertext columns remain but UI should hide content.';
@@ -334,6 +503,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_messages_sender_receipt ON public.messages;
 CREATE TRIGGER trg_messages_sender_receipt
   AFTER INSERT ON public.messages
   FOR EACH ROW EXECUTE FUNCTION public.on_message_created_sender_receipt();
@@ -352,9 +522,21 @@ WHERE encrypted_file_key_for_recipient IS NULL OR nonce IS NULL;
 
 ALTER TABLE public.attachments DROP COLUMN IF EXISTS ciphertext_sha256;
 
-ALTER TABLE public.attachments
-  ALTER COLUMN encrypted_file_key_for_recipient SET NOT NULL,
-  ALTER COLUMN nonce SET NOT NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='attachments' AND column_name='encrypted_file_key_for_recipient' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.attachments ALTER COLUMN encrypted_file_key_for_recipient SET NOT NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='attachments' AND column_name='nonce' AND is_nullable='YES'
+  ) THEN
+    ALTER TABLE public.attachments ALTER COLUMN nonce SET NOT NULL;
+  END IF;
+END $$;
 
 COMMENT ON COLUMN public.attachments.encrypted_file_key_for_recipient IS 'Opaque encrypted file key material for recipient (Base64 or wire format string).';
 
@@ -363,13 +545,28 @@ CREATE INDEX IF NOT EXISTS attachments_message_idx ON public.attachments (messag
 -- -----------------------------------------------------------------------------
 -- 8) Security events: metadata column name (payload → metadata)
 -- -----------------------------------------------------------------------------
-ALTER TABLE public.security_events RENAME COLUMN payload TO metadata;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = 'security_events' AND c.column_name = 'payload'
+  )
+   AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND c.table_name = 'security_events' AND c.column_name = 'metadata'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.security_events RENAME COLUMN payload TO metadata';
+  END IF;
+END $$;
 
 COMMENT ON COLUMN public.security_events.metadata IS 'Structured audit metadata; never store message plaintext or device private keys.';
 
 -- -----------------------------------------------------------------------------
 -- 9) RPC: direct conversations + profile search (narrow SELECT on profiles)
 -- -----------------------------------------------------------------------------
+-- DROP required when remote body used different argument names (CREATE OR REPLACE cannot rename params).
+DROP FUNCTION IF EXISTS public.create_direct_conversation(UUID);
+
 CREATE OR REPLACE FUNCTION public.create_direct_conversation(peer_user_id UUID)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -435,6 +632,7 @@ COMMENT ON FUNCTION public.search_profiles(TEXT, INT) IS 'SECURITY DEFINER usern
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS profiles_select_own ON public.profiles;
 CREATE POLICY profiles_select_own
   ON public.profiles
   FOR SELECT
@@ -442,6 +640,7 @@ CREATE POLICY profiles_select_own
   USING (id = auth.uid());
 COMMENT ON POLICY profiles_select_own ON public.profiles IS 'Every user can read their own profile row for settings UI.';
 
+DROP POLICY IF EXISTS profiles_select_conversation_peers ON public.profiles;
 CREATE POLICY profiles_select_conversation_peers
   ON public.profiles
   FOR SELECT
@@ -460,6 +659,7 @@ CREATE POLICY profiles_select_conversation_peers
   );
 COMMENT ON POLICY profiles_select_conversation_peers ON public.profiles IS 'Members of the same active conversation can see each other display fields (no global directory scrape via table SELECT).';
 
+DROP POLICY IF EXISTS profiles_update_own ON public.profiles;
 CREATE POLICY profiles_update_own
   ON public.profiles
   FOR UPDATE
@@ -473,6 +673,7 @@ COMMENT ON POLICY profiles_update_own ON public.profiles IS 'Users may edit only
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.devices ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS devices_select_visible ON public.devices;
 CREATE POLICY devices_select_visible
   ON public.devices
   FOR SELECT
@@ -483,6 +684,7 @@ CREATE POLICY devices_select_visible
   );
 COMMENT ON POLICY devices_select_visible ON public.devices IS 'Device owners see revoked rows; other users only see published keys for active devices (bootstrap before first DM).';
 
+DROP POLICY IF EXISTS devices_insert_own ON public.devices;
 CREATE POLICY devices_insert_own
   ON public.devices
   FOR INSERT
@@ -490,6 +692,7 @@ CREATE POLICY devices_insert_own
   WITH CHECK (user_id = auth.uid());
 COMMENT ON POLICY devices_insert_own ON public.devices IS 'Users register devices only for themselves.';
 
+DROP POLICY IF EXISTS devices_update_own ON public.devices;
 CREATE POLICY devices_update_own
   ON public.devices
   FOR UPDATE
@@ -498,6 +701,7 @@ CREATE POLICY devices_update_own
   WITH CHECK (user_id = auth.uid());
 COMMENT ON POLICY devices_update_own ON public.devices IS 'Users rotate metadata / keys only on their own devices.';
 
+DROP POLICY IF EXISTS devices_delete_own ON public.devices;
 CREATE POLICY devices_delete_own
   ON public.devices
   FOR DELETE
@@ -510,6 +714,7 @@ COMMENT ON POLICY devices_delete_own ON public.devices IS 'Users may delete thei
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.one_time_prekeys ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS otp_select_visible ON public.one_time_prekeys;
 CREATE POLICY otp_select_visible
   ON public.one_time_prekeys
   FOR SELECT
@@ -523,6 +728,7 @@ CREATE POLICY otp_select_visible
   );
 COMMENT ON POLICY otp_select_visible ON public.one_time_prekeys IS 'Owners manage secrets indirectly; others read unconsumed published OTPKs for active devices.';
 
+DROP POLICY IF EXISTS otp_insert_own_device ON public.one_time_prekeys;
 CREATE POLICY otp_insert_own_device
   ON public.one_time_prekeys
   FOR INSERT
@@ -533,6 +739,7 @@ CREATE POLICY otp_insert_own_device
   );
 COMMENT ON POLICY otp_insert_own_device ON public.one_time_prekeys IS 'Users publish OTPKs only for devices they own.';
 
+DROP POLICY IF EXISTS otp_update_own_device ON public.one_time_prekeys;
 CREATE POLICY otp_update_own_device
   ON public.one_time_prekeys
   FOR UPDATE
@@ -545,6 +752,7 @@ CREATE POLICY otp_update_own_device
   );
 COMMENT ON POLICY otp_update_own_device ON public.one_time_prekeys IS 'Owners may mark OTPKs consumed or rotate bookkeeping fields only on their devices.';
 
+DROP POLICY IF EXISTS otp_delete_own_device ON public.one_time_prekeys;
 CREATE POLICY otp_delete_own_device
   ON public.one_time_prekeys
   FOR DELETE
@@ -559,6 +767,7 @@ COMMENT ON POLICY otp_delete_own_device ON public.one_time_prekeys IS 'Owners ma
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS conversations_select_member ON public.conversations;
 CREATE POLICY conversations_select_member
   ON public.conversations
   FOR SELECT
@@ -573,6 +782,7 @@ CREATE POLICY conversations_select_member
   );
 COMMENT ON POLICY conversations_select_member ON public.conversations IS 'Members may read conversation shells only while membership is active.';
 
+DROP POLICY IF EXISTS conversations_insert_creator ON public.conversations;
 CREATE POLICY conversations_insert_creator
   ON public.conversations
   FOR INSERT
@@ -582,6 +792,7 @@ COMMENT ON POLICY conversations_insert_creator ON public.conversations IS 'Authe
 
 ALTER TABLE public.conversation_members ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS cm_select_member ON public.conversation_members;
 CREATE POLICY cm_select_member
   ON public.conversation_members
   FOR SELECT
@@ -596,6 +807,7 @@ CREATE POLICY cm_select_member
   );
 COMMENT ON POLICY cm_select_member ON public.conversation_members IS 'Members can enumerate participant rows for conversations they actively belong to.';
 
+DROP POLICY IF EXISTS cm_insert_self_when_creator ON public.conversation_members;
 CREATE POLICY cm_insert_self_when_creator
   ON public.conversation_members
   FOR INSERT
@@ -609,6 +821,7 @@ CREATE POLICY cm_insert_self_when_creator
   );
 COMMENT ON POLICY cm_insert_self_when_creator ON public.conversation_members IS 'Creator adds themselves when forming a conversation shell (paired with RPC inserts).';
 
+DROP POLICY IF EXISTS cm_update_own_membership ON public.conversation_members;
 CREATE POLICY cm_update_own_membership
   ON public.conversation_members
   FOR UPDATE
@@ -622,6 +835,7 @@ COMMENT ON POLICY cm_update_own_membership ON public.conversation_members IS 'Us
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS messages_select_member ON public.messages;
 CREATE POLICY messages_select_member
   ON public.messages
   FOR SELECT
@@ -636,6 +850,7 @@ CREATE POLICY messages_select_member
   );
 COMMENT ON POLICY messages_select_member ON public.messages IS 'Ciphertext readable only by active conversation participants.';
 
+DROP POLICY IF EXISTS messages_insert_sender_member ON public.messages;
 CREATE POLICY messages_insert_sender_member
   ON public.messages
   FOR INSERT
@@ -655,6 +870,7 @@ CREATE POLICY messages_insert_sender_member
   );
 COMMENT ON POLICY messages_insert_sender_member ON public.messages IS 'Users send only as themselves from owned devices into conversations where they are active members.';
 
+DROP POLICY IF EXISTS messages_update_sender_soft_delete ON public.messages;
 CREATE POLICY messages_update_sender_soft_delete
   ON public.messages
   FOR UPDATE
@@ -684,6 +900,7 @@ COMMENT ON POLICY messages_update_sender_soft_delete ON public.messages IS 'Send
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.message_receipts ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS receipts_select_member ON public.message_receipts;
 CREATE POLICY receipts_select_member
   ON public.message_receipts
   FOR SELECT
@@ -697,6 +914,7 @@ CREATE POLICY receipts_select_member
   );
 COMMENT ON POLICY receipts_select_member ON public.message_receipts IS 'Receipt rows visible only inside shared conversations.';
 
+DROP POLICY IF EXISTS receipts_insert_self_member ON public.message_receipts;
 CREATE POLICY receipts_insert_self_member
   ON public.message_receipts
   FOR INSERT
@@ -711,6 +929,7 @@ CREATE POLICY receipts_insert_self_member
   );
 COMMENT ON POLICY receipts_insert_self_member ON public.message_receipts IS 'Users record delivery/read state only for themselves on accessible messages.';
 
+DROP POLICY IF EXISTS receipts_update_own_member ON public.message_receipts;
 CREATE POLICY receipts_update_own_member
   ON public.message_receipts
   FOR UPDATE
@@ -735,6 +954,7 @@ COMMENT ON POLICY receipts_update_own_member ON public.message_receipts IS 'Reci
 
 ALTER TABLE public.attachments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS attachments_select_member ON public.attachments;
 CREATE POLICY attachments_select_member
   ON public.attachments
   FOR SELECT
@@ -748,6 +968,7 @@ CREATE POLICY attachments_select_member
   );
 COMMENT ON POLICY attachments_select_member ON public.attachments IS 'Attachment metadata follows message visibility.';
 
+DROP POLICY IF EXISTS attachments_insert_member ON public.attachments;
 CREATE POLICY attachments_insert_member
   ON public.attachments
   FOR INSERT
@@ -763,6 +984,7 @@ COMMENT ON POLICY attachments_insert_member ON public.attachments IS 'Participan
 
 ALTER TABLE public.security_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS security_events_select_own ON public.security_events;
 CREATE POLICY security_events_select_own
   ON public.security_events
   FOR SELECT
@@ -770,6 +992,7 @@ CREATE POLICY security_events_select_own
   USING (user_id = auth.uid());
 COMMENT ON POLICY security_events_select_own ON public.security_events IS 'Audit stream is private per user.';
 
+DROP POLICY IF EXISTS security_events_insert_own ON public.security_events;
 CREATE POLICY security_events_insert_own
   ON public.security_events
   FOR INSERT
@@ -781,10 +1004,6 @@ COMMENT ON POLICY security_events_insert_own ON public.security_events IS 'Clien
 -- 16) Storage policies refreshed for renamed attachment columns (logic unchanged)
 -- -----------------------------------------------------------------------------
 DROP POLICY IF EXISTS attachments_storage_insert_own_prefix ON storage.objects;
-DROP POLICY IF EXISTS attachments_storage_select_via_row ON storage.objects;
-DROP POLICY IF EXISTS attachments_storage_update_own_prefix ON storage.objects;
-DROP POLICY IF EXISTS attachments_storage_delete_own_prefix ON storage.objects;
-
 CREATE POLICY attachments_storage_insert_own_prefix
   ON storage.objects
   FOR INSERT
@@ -793,8 +1012,8 @@ CREATE POLICY attachments_storage_insert_own_prefix
     bucket_id = 'attachments'
     AND (storage.foldername(name))[1] = auth.uid()::TEXT
   );
-COMMENT ON POLICY attachments_storage_insert_own_prefix ON storage.objects IS 'Upload ciphertext blobs only under the caller uid prefix.';
 
+DROP POLICY IF EXISTS attachments_storage_select_via_row ON storage.objects;
 CREATE POLICY attachments_storage_select_via_row
   ON storage.objects
   FOR SELECT
@@ -808,8 +1027,8 @@ CREATE POLICY attachments_storage_select_via_row
       WHERE a.storage_path = name AND cm.user_id = auth.uid() AND cm.left_at IS NULL
     )
   );
-COMMENT ON POLICY attachments_storage_select_via_row ON storage.objects IS 'Download attachment blobs only when metadata row is visible via membership.';
 
+DROP POLICY IF EXISTS attachments_storage_update_own_prefix ON storage.objects;
 CREATE POLICY attachments_storage_update_own_prefix
   ON storage.objects
   FOR UPDATE
@@ -823,6 +1042,7 @@ CREATE POLICY attachments_storage_update_own_prefix
     AND (storage.foldername(name))[1] = auth.uid()::TEXT
   );
 
+DROP POLICY IF EXISTS attachments_storage_delete_own_prefix ON storage.objects;
 CREATE POLICY attachments_storage_delete_own_prefix
   ON storage.objects
   FOR DELETE

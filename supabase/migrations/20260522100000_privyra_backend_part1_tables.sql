@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- -----------------------------------------------------------------------------
 -- profiles
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
   username TEXT NOT NULL UNIQUE,
   display_name TEXT NOT NULL DEFAULT '',
@@ -21,14 +21,14 @@ CREATE TABLE public.profiles (
   )
 );
 
-CREATE INDEX profiles_username_lower_idx ON public.profiles (lower(username));
+CREATE INDEX IF NOT EXISTS profiles_username_lower_idx ON public.profiles (lower(username));
 
 COMMENT ON TABLE public.profiles IS 'Public profile fields only; no secrets or keys.';
 
 -- -----------------------------------------------------------------------------
 -- user_settings
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.user_settings (
+CREATE TABLE IF NOT EXISTS public.user_settings (
   user_id UUID PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
   theme TEXT NOT NULL DEFAULT 'system',
   read_receipts_enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -45,7 +45,7 @@ COMMENT ON TABLE public.user_settings IS 'Per-user UX preferences; toggles only 
 -- -----------------------------------------------------------------------------
 -- devices (public key material only)
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.devices (
+CREATE TABLE IF NOT EXISTS public.devices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   device_name TEXT NOT NULL,
@@ -63,14 +63,14 @@ CREATE TABLE public.devices (
   CONSTRAINT devices_identity_nonempty CHECK (char_length(identity_public_key) > 0)
 );
 
-CREATE INDEX devices_user_idx ON public.devices (user_id);
+CREATE INDEX IF NOT EXISTS devices_user_idx ON public.devices (user_id);
 
 COMMENT ON TABLE public.devices IS 'Device rows hold DH/signing public halves + signed pre-key metadata only.';
 
 -- -----------------------------------------------------------------------------
 -- one_time_prekeys
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.one_time_prekeys (
+CREATE TABLE IF NOT EXISTS public.one_time_prekeys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   device_id UUID NOT NULL REFERENCES public.devices (id) ON DELETE CASCADE,
@@ -81,12 +81,12 @@ CREATE TABLE public.one_time_prekeys (
   UNIQUE (device_id, key_id)
 );
 
-CREATE INDEX otpk_device_idx ON public.one_time_prekeys (device_id);
+CREATE INDEX IF NOT EXISTS otpk_device_idx ON public.one_time_prekeys (device_id);
 
 -- -----------------------------------------------------------------------------
 -- contacts
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.contacts (
+CREATE TABLE IF NOT EXISTS public.contacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   contact_user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -99,12 +99,12 @@ CREATE TABLE public.contacts (
   UNIQUE (owner_id, contact_user_id)
 );
 
-CREATE INDEX contacts_owner_idx ON public.contacts (owner_id);
+CREATE INDEX IF NOT EXISTS contacts_owner_idx ON public.contacts (owner_id);
 
 -- -----------------------------------------------------------------------------
 -- conversations & members
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.conversations (
+CREATE TABLE IF NOT EXISTS public.conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type TEXT NOT NULL CHECK (type IN ('direct', 'group')),
   title TEXT,
@@ -114,7 +114,7 @@ CREATE TABLE public.conversations (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE public.conversation_members (
+CREATE TABLE IF NOT EXISTS public.conversation_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations (id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -127,13 +127,13 @@ CREATE TABLE public.conversation_members (
   UNIQUE (conversation_id, user_id)
 );
 
-CREATE INDEX cm_user_idx ON public.conversation_members (user_id);
-CREATE INDEX cm_conv_idx ON public.conversation_members (conversation_id);
+CREATE INDEX IF NOT EXISTS cm_user_idx ON public.conversation_members (user_id);
+CREATE INDEX IF NOT EXISTS cm_conv_idx ON public.conversation_members (conversation_id);
 
 -- -----------------------------------------------------------------------------
 -- messages (ciphertext only — never plaintext_body columns)
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.messages (
+CREATE TABLE IF NOT EXISTS public.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations (id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -152,20 +152,30 @@ CREATE TABLE public.messages (
   CONSTRAINT messages_nonce_nonempty CHECK (char_length(nonce) > 0)
 );
 
-CREATE INDEX messages_conv_created_idx ON public.messages (conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS messages_conv_created_idx ON public.messages (conversation_id, created_at DESC);
 
-ALTER TABLE public.messages
-  ADD CONSTRAINT messages_reply_self_fk FOREIGN KEY (reply_to_message_id) REFERENCES public.messages (id) ON DELETE SET NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='messages' AND column_name='reply_to_message_id')
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'messages_reply_self_fk') THEN
+    ALTER TABLE public.messages
+      ADD CONSTRAINT messages_reply_self_fk FOREIGN KEY (reply_to_message_id) REFERENCES public.messages (id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
-ALTER TABLE public.conversation_members
-  ADD CONSTRAINT conversation_members_last_read_fk FOREIGN KEY (last_read_message_id) REFERENCES public.messages (id) ON DELETE SET NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='conversation_members' AND column_name='last_read_message_id')
+     AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'conversation_members_last_read_fk') THEN
+    ALTER TABLE public.conversation_members
+      ADD CONSTRAINT conversation_members_last_read_fk FOREIGN KEY (last_read_message_id) REFERENCES public.messages (id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.messages IS 'Client-encrypted payloads only; algorithm distinguishes envelope versions.';
 
 -- -----------------------------------------------------------------------------
 -- message_recipients (delivery/read matrix)
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.message_recipients (
+CREATE TABLE IF NOT EXISTS public.message_recipients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id UUID NOT NULL REFERENCES public.messages (id) ON DELETE CASCADE,
   recipient_user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -177,12 +187,12 @@ CREATE TABLE public.message_recipients (
   UNIQUE (message_id, recipient_user_id)
 );
 
-CREATE INDEX message_recipients_user_idx ON public.message_recipients (recipient_user_id);
+CREATE INDEX IF NOT EXISTS message_recipients_user_idx ON public.message_recipients (recipient_user_id);
 
 -- -----------------------------------------------------------------------------
 -- attachments (metadata for ciphertext blobs in Storage)
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.attachments (
+CREATE TABLE IF NOT EXISTS public.attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   message_id UUID NOT NULL REFERENCES public.messages (id) ON DELETE CASCADE,
   conversation_id UUID NOT NULL REFERENCES public.conversations (id) ON DELETE CASCADE,
@@ -198,14 +208,14 @@ CREATE TABLE public.attachments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX attachments_message_idx ON public.attachments (message_id);
+CREATE INDEX IF NOT EXISTS attachments_message_idx ON public.attachments (message_id);
 
 COMMENT ON TABLE public.attachments IS 'Rows reference ciphertext objects only; decrypt happens client-side.';
 
 -- -----------------------------------------------------------------------------
 -- calls & typing & audit & reports
 -- -----------------------------------------------------------------------------
-CREATE TABLE public.calls (
+CREATE TABLE IF NOT EXISTS public.calls (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations (id) ON DELETE CASCADE,
   caller_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -216,7 +226,7 @@ CREATE TABLE public.calls (
   metadata JSONB NOT NULL DEFAULT '{}'::JSONB
 );
 
-CREATE TABLE public.call_participants (
+CREATE TABLE IF NOT EXISTS public.call_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   call_id UUID NOT NULL REFERENCES public.calls (id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -227,7 +237,7 @@ CREATE TABLE public.call_participants (
 
 COMMENT ON TABLE public.calls IS 'Signalling shell only — media path not implemented (incomplete feature).';
 
-CREATE TABLE public.typing_events (
+CREATE TABLE IF NOT EXISTS public.typing_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations (id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
@@ -235,9 +245,9 @@ CREATE TABLE public.typing_events (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX typing_events_conv_idx ON public.typing_events (conversation_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS typing_events_conv_idx ON public.typing_events (conversation_id, updated_at DESC);
 
-CREATE TABLE public.security_events (
+CREATE TABLE IF NOT EXISTS public.security_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users (id) ON DELETE CASCADE,
   event_type TEXT NOT NULL,
@@ -246,9 +256,9 @@ CREATE TABLE public.security_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX security_events_user_created_idx ON public.security_events (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS security_events_user_created_idx ON public.security_events (user_id, created_at DESC);
 
-CREATE TABLE public.reported_messages (
+CREATE TABLE IF NOT EXISTS public.reported_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   reporter_id UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
   message_id UUID NOT NULL REFERENCES public.messages (id) ON DELETE CASCADE,
@@ -259,4 +269,4 @@ CREATE TABLE public.reported_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX reported_messages_reporter_idx ON public.reported_messages (reporter_id);
+CREATE INDEX IF NOT EXISTS reported_messages_reporter_idx ON public.reported_messages (reporter_id);

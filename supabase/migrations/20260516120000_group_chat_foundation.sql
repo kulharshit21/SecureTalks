@@ -180,6 +180,7 @@ GRANT EXECUTE ON FUNCTION public.group_remove_member(UUID, UUID) TO authenticate
 -- -----------------------------------------------------------------------------
 ALTER TABLE public.group_session_epochs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS gse_select_member ON public.group_session_epochs;
 CREATE POLICY gse_select_member
   ON public.group_session_epochs
   FOR SELECT
@@ -193,6 +194,7 @@ CREATE POLICY gse_select_member
     )
   );
 
+DROP POLICY IF EXISTS gse_insert_admin ON public.group_session_epochs;
 CREATE POLICY gse_insert_admin
   ON public.group_session_epochs
   FOR INSERT
@@ -213,6 +215,7 @@ CREATE POLICY gse_insert_admin
 
 ALTER TABLE public.group_key_wraps ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS gkw_select_own_recipient ON public.group_key_wraps;
 CREATE POLICY gkw_select_own_recipient
   ON public.group_key_wraps
   FOR SELECT
@@ -229,6 +232,7 @@ CREATE POLICY gkw_select_own_recipient
     )
   );
 
+DROP POLICY IF EXISTS gkw_insert_admin_author_device ON public.group_key_wraps;
 CREATE POLICY gkw_insert_admin_author_device
   ON public.group_key_wraps
   FOR INSERT
