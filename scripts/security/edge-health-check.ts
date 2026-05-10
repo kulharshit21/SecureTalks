@@ -209,6 +209,7 @@ async function main() {
       method: "POST",
       headers: {
         apikey: ANON_KEY,
+        Authorization: `Bearer ${ANON_KEY}`,
         "Content-Type": "application/json",
         "x-cleanup-secret": CLEANUP_SECRET,
       },
