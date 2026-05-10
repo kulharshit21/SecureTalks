@@ -8,7 +8,8 @@ export function AiFeaturesBanner() {
       <Sparkles className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
       <p>
         <span className="font-medium text-foreground">AI features are opt-in.</span> Private messages are never analyzed
-        automatically. Rewrite, summarize, report analysis, and smart reply run only when you click them and confirm.
+        automatically. Rewrite, summarize, report analysis, and smart reply send only what you confirm to our server and then
+        to Mistral — outside the E2EE chat boundary — same caution as any external AI.
       </p>
     </div>
   );

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { callMistralProxy } from "@/lib/ai/client";
 import { hasAcceptedAiConsent, setAiConsentAccepted } from "@/lib/ai/consent-storage";
+import { ENCRYPTED_ATTACHMENTS_BUCKET } from "@/lib/supabase/storage-buckets";
 import { uploadEncryptedAttachmentViaXhr } from "@/lib/supabase/storage-upload-xhr";
 import { useCipherSession } from "@/stores/cipher-session";
 
@@ -114,6 +115,8 @@ export function MessageComposer(props: {
   const ttlMs = useMemo(() => EXPIRY_CHOICES.find((c) => c.id === expiryChoice)?.ttlMs ?? null, [expiryChoice]);
 
   const isDirect = props.conversationKind === "direct";
+  /** Group chats do not implement encrypt-and-upload; ignore any stale direct-chat file selection. */
+  const attachmentForSend = isDirect ? pendingFile : null;
 
   const keysReady = isDirect ? Boolean(props.peerBundle && props.peerDeviceId) : Boolean(props.groupSendCtx);
 
@@ -133,10 +136,10 @@ export function MessageComposer(props: {
       deviceId &&
       props.peerDeviceId &&
       props.peerBundle &&
-      pendingFile &&
+      attachmentForSend &&
       !props.disabled &&
       !busy &&
-      pendingFile.size <= PLAINTEXT_ATTACHMENT_MAX_BYTES,
+      attachmentForSend.size <= PLAINTEXT_ATTACHMENT_MAX_BYTES,
   );
 
   const canSubmit = canSendText || canSendAttachment;
@@ -243,7 +246,7 @@ export function MessageComposer(props: {
   }
 
   async function sendAttachmentMessage() {
-    const file = pendingFile;
+    const file = attachmentForSend;
     if (!cipher || !deviceId || !props.peerDeviceId || !props.peerBundle || !file) return;
     if (file.size > PLAINTEXT_ATTACHMENT_MAX_BYTES) {
       toast.error("File too large (max 50 MB).");
@@ -268,7 +271,7 @@ export function MessageComposer(props: {
         caption: text.trim() || undefined,
         ttlMs,
         uploadBlob: async (path, blob, onUploadProgress) => {
-          await uploadEncryptedAttachmentViaXhr(supabase, "attachments", path, blob, onUploadProgress);
+          await uploadEncryptedAttachmentViaXhr(supabase, ENCRYPTED_ATTACHMENTS_BUCKET, path, blob, onUploadProgress);
         },
         onPhaseProgress: (pct, phase) => setProgress({ pct, phase }),
       });
@@ -286,7 +289,7 @@ export function MessageComposer(props: {
   }
 
   async function onSubmit() {
-    if (pendingFile) {
+    if (attachmentForSend) {
       await sendAttachmentMessage();
       return;
     }
@@ -338,7 +341,7 @@ export function MessageComposer(props: {
           }}
           placeholder={
             keysReady
-              ? pendingFile
+              ? attachmentForSend
                 ? "Optional caption (encrypted with the file manifest)…"
                 : "Write a message… (encrypted before sync)"
               : isDirect
@@ -419,15 +422,15 @@ export function MessageComposer(props: {
               variant="outline"
               size="sm"
               className="rounded-xl gap-2"
-              disabled={props.disabled || busy || !keysReady}
+              disabled={props.disabled || busy || !keysReady || !isDirect}
               onClick={() => fileInputRef.current?.click()}
             >
               <Paperclip className="size-4" aria-hidden />
               Attach
             </Button>
-            {pendingFile ? (
+            {attachmentForSend ? (
               <span className="inline-flex max-w-[min(100%,240px)] items-center gap-2 rounded-xl border border-border/60 bg-muted/15 px-3 py-1.5 text-xs">
-                <span className="truncate font-medium">{pendingFile.name}</span>
+                <span className="truncate font-medium">{attachmentForSend.name}</span>
                 <button
                   type="button"
                   className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -439,7 +442,14 @@ export function MessageComposer(props: {
               </span>
             ) : null}
             <p className="max-w-[min(100%,20rem)] text-xs leading-snug text-muted-foreground">
-              Files are encrypted in-browser; Storage receives ciphertext only (under 50&nbsp;MB).
+              {isDirect ? (
+                <>Files are encrypted in-browser; Storage receives ciphertext only (under 50&nbsp;MB).</>
+              ) : (
+                <span className="text-amber-800 dark:text-amber-200">
+                  <span className="font-medium text-foreground">Incomplete:</span> group file sharing is not wired to the
+                  client-side encrypt-and-upload path yet — use direct chats for attachments.
+                </span>
+              )}
             </p>
           </div>
           <Button className="h-10 shrink-0 rounded-xl px-6 font-medium" disabled={!canSubmit} onClick={() => void onSubmit()}>

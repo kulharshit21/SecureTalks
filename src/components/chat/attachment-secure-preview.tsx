@@ -9,12 +9,13 @@ import { b64ToBytes } from "@/lib/crypto/keys";
 import type { EncryptedWirePayload, MessageAssociatedData, ParsedPublicKeyBundle, SessionCipher } from "@/lib/crypto/types";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { buttonVariants } from "@/components/ui/button";
+import { ENCRYPTED_ATTACHMENTS_BUCKET } from "@/lib/supabase/storage-buckets";
 import { cn } from "@/lib/utils";
 
 export type AttachmentDbRow = {
   storage_path: string;
   mime_type: string;
-  encrypted_file_key_for_recipient: string;
+  encrypted_file_key: string;
   nonce: string;
 };
 
@@ -43,13 +44,15 @@ export function AttachmentSecurePreview(props: {
       setPhase("loading");
       setDecryptedBytes(null);
       try {
-        const { data: dl, error: dlErr } = await supabase.storage.from("attachments").download(props.attachment.storage_path);
+        const { data: dl, error: dlErr } = await supabase.storage
+          .from(ENCRYPTED_ATTACHMENTS_BUCKET)
+          .download(props.attachment.storage_path);
         if (dlErr || !dl) throw new Error(dlErr?.message ?? "Download failed.");
 
         const encryptedBlob = new Uint8Array(await dl.arrayBuffer());
 
         const wrapped: EncryptedWirePayload = {
-          ciphertextB64: props.attachment.encrypted_file_key_for_recipient,
+          ciphertextB64: props.attachment.encrypted_file_key,
           nonceB64: props.attachment.nonce,
         };
         const keyB64 = await props.cipher.decryptUtf8(wrapped, props.senderBundle, props.meta);
@@ -75,7 +78,7 @@ export function AttachmentSecurePreview(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when ciphertext pointer changes
   }, [
     props.attachment?.storage_path,
-    props.attachment?.encrypted_file_key_for_recipient,
+    props.attachment?.encrypted_file_key,
     props.attachment?.nonce,
     props.messageId,
     props.meta.conversationId,

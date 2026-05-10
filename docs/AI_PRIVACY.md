@@ -31,6 +31,7 @@ Attachments without decrypted caption/text are **not** selectable for summarize/
 - **`POST /api/ai/mistral`** requires an authenticated Supabase session.  
 - **Rate limiting** applies per user ID (configurable env).  
 - **Prompts and model outputs are not logged** by application code (avoid server logs that echo bodies).  
+- **No database persistence**: this route does not insert AI prompts or completions into Supabase (or any app storage); content only transits to Mistral’s API. Hosting platforms may still retain HTTP logs — operate AI features only if that residual risk is acceptable.
 - **Secrets**: `MISTRAL_API_KEY` is server-only; never exposed to the browser.
 
 ## Threat notes

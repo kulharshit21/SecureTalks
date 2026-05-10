@@ -65,8 +65,10 @@ describe("sendEncryptedAttachmentMessage", () => {
                 }),
               }),
             }),
-            delete: () => ({
-              eq: async () => ({ error: null }),
+            update: () => ({
+              eq: () => ({
+                eq: async () => ({ error: null }),
+              }),
             }),
           };
         }

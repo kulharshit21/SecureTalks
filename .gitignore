@@ -40,3 +40,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local tooling / generated graphs (do not commit)
+/graphify-out/
+*.original.md
+.graphify_*
+.graphify_python
+.pid.txt
+.pname.txt
+.pquery.sql
+
+# supabase CLI temp
+supabase/.temp/

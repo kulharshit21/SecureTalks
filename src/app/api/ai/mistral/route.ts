@@ -17,6 +17,11 @@ function parseRateEnv(): { windowMs: number; maxInWindow: number } {
 }
 
 export async function POST(req: Request) {
+  /**
+   * Invariants (golden rule — see SECURITY_CLAIMS.md):
+   * - Never persist user payloads or completions to Postgres, logs, or Redis from this handler.
+   * - Payload exists only in memory for the upstream Mistral request (and whatever Mistral retains under their policy).
+   */
   const apiKey = process.env.MISTRAL_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json({ error: "AI features are not configured on this deployment." }, { status: 503 });
@@ -50,7 +55,7 @@ export async function POST(req: Request) {
   }
 
   const { purpose, payload } = validated.body;
-  const model = process.env.MISTRAL_CHAT_MODEL?.trim() || "mistral-small-latest";
+  const model = process.env.MISTRAL_CHAT_MODEL?.trim() || "mistral-large-latest";
   const system = systemPromptForPurpose(purpose);
 
   /** Do not log prompts or completions — avoids accidental PII in server logs. */

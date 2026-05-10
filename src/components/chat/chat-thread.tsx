@@ -248,7 +248,7 @@ export function ChatThread(props: { conversationId: string; userId: string }) {
     for (let i = 0; i < 8; i++) {
       const { data } = await supabase
         .from("attachments")
-        .select("storage_path, mime_type, encrypted_file_key_for_recipient, nonce")
+        .select("storage_path, mime_type, encrypted_file_key, nonce")
         .eq("message_id", messageId)
         .maybeSingle();
       if (data) {
@@ -455,11 +455,11 @@ export function ChatThread(props: { conversationId: string; userId: string }) {
 
   async function refreshReceipts(outgoingIds: string[]) {
     if (!peerUserId || outgoingIds.length === 0) return;
-    const { data, error } = await supabase
-      .from("message_receipts")
-      .select("message_id, user_id, delivered_at, read_at")
-      .eq("user_id", peerUserId)
-      .in("message_id", outgoingIds);
+      const { data, error } = await supabase
+        .from("message_recipients")
+        .select("message_id, delivered_at, read_at")
+        .eq("recipient_user_id", peerUserId)
+        .in("message_id", outgoingIds);
 
     if (error) return;
 
@@ -622,22 +622,21 @@ export function ChatThread(props: { conversationId: string; userId: string }) {
           await decryptRow(row);
 
           if (row.sender_device_id !== deviceId) {
-            const now = new Date().toISOString();
-            await supabase.from("message_receipts").upsert(
-              {
-                message_id: row.id,
-                user_id: props.userId,
-                delivered_at: now,
-                read_at: now,
-              },
-              { onConflict: "message_id,user_id" },
-            );
+            const { error: rpcErr } = await supabase.rpc("mark_message_read", { message_uuid: row.id });
+            if (rpcErr) {
+              console.warn("mark_message_read", rpcErr.message);
+            }
           }
         },
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "attachments" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "attachments",
+          filter: `conversation_id=eq.${props.conversationId}`,
+        },
         (payload) => {
           const row = payload.new as AttachmentDbRow & { message_id?: string };
           const mid = row.message_id;
@@ -645,7 +644,7 @@ export function ChatThread(props: { conversationId: string; userId: string }) {
           const slim: AttachmentDbRow = {
             storage_path: row.storage_path,
             mime_type: row.mime_type,
-            encrypted_file_key_for_recipient: row.encrypted_file_key_for_recipient,
+            encrypted_file_key: row.encrypted_file_key,
             nonce: row.nonce,
           };
           setAttachmentsByMessageId((prev) => new Map(prev).set(mid, slim));

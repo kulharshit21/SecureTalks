@@ -15,6 +15,10 @@ This mirrors what the web client implements today: **not MLS**, not audited at p
 - Adding a member requires an admin to **rotate** so the newcomer receives a wrap for the latest epoch.
 - Removing a member triggers UI prompts for admins to **rotate** — former members retain historic ciphertext locally (same limitation as pre-key-less pairwise designs).
 
+## Attachments
+
+**Not implemented for groups in this codebase.** Only **direct** conversations use the encrypt-then-upload attachment pipeline. Do not claim group file E2EE until a symmetric or pairwise wrap path for file keys is implemented and tested.
+
 ## Comparison to production MLS
 
 | Property | MVP symmetric epochs | MLS (target) |

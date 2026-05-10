@@ -26,8 +26,10 @@ export function AiConsentDialog(props: {
               AI features are optional. Private messages are never analyzed automatically.
             </span>
             <span className="block">
-              When you use Rewrite, Summarize, Report analysis, or Smart reply, only the text you explicitly confirm is sent to
-              Mistral through our server proxy. Normal chat send/receive stays end-to-end encrypted and does not touch Mistral.
+              When you use Rewrite, Summarize, Report analysis, or Smart reply, only the text you explicitly confirm is sent —
+              first to this app&apos;s server, then to Mistral. That step is <strong>outside</strong> the end-to-end encrypted
+              chat boundary (same risk class as pasting into an external assistant). Normal Send stays encrypted client-side and
+              does not touch Mistral.
             </span>
             <span className="block text-muted-foreground">See docs/AI_PRIVACY.md for the full policy.</span>
           </DialogDescription>

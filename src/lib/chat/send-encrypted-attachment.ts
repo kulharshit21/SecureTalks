@@ -7,6 +7,7 @@ import { bytesToB64 } from "@/lib/crypto/keys";
 import { buildMessageInsertRow } from "@/lib/crypto/message-payload";
 import type { MessageAssociatedData, ParsedPublicKeyBundle, SessionCipher } from "@/lib/crypto/types";
 import { expiresAtIsoFromTtlMs } from "@/lib/message-expiry";
+import { ENCRYPTED_ATTACHMENTS_BUCKET, encryptedAttachmentObjectPath } from "@/lib/supabase/storage-buckets";
 
 export type UploadEncryptedBlobFn = (
   storagePath: string,
@@ -16,11 +17,14 @@ export type UploadEncryptedBlobFn = (
 
 export type AttachmentInsertRow = {
   message_id: string;
+  conversation_id: string;
+  uploader_id: string;
+  storage_bucket: string;
   storage_path: string;
+  encrypted_file_key: string;
+  nonce: string;
   mime_type: string;
   size_bytes: number;
-  encrypted_file_key_for_recipient: string;
-  nonce: string;
 };
 
 /**
@@ -66,15 +70,6 @@ export async function sendEncryptedAttachmentMessage(opts: {
 
   const encryptedBody = await opts.cipher.encryptUtf8(JSON.stringify(manifest), opts.peerBundle, meta);
 
-  const storagePath = `${opts.senderUserId}/${opts.conversationId}/${crypto.randomUUID()}.bin`;
-
-  const uploadBody = new Uint8Array(ciphertextBlob.byteLength);
-  uploadBody.set(ciphertextBlob);
-
-  await opts.uploadBlob(storagePath, new Blob([uploadBody], { type: "application/octet-stream" }), (r) => {
-    opts.onPhaseProgress(40 + Math.round(r * 55), "upload");
-  });
-
   const row = buildMessageInsertRow({
     conversationId: opts.conversationId,
     senderUserId: opts.senderUserId,
@@ -91,11 +86,19 @@ export async function sendEncryptedAttachmentMessage(opts: {
 
   const { data: inserted, error: msgErr } = await opts.supabase.from("messages").insert(row).select("id").single();
   if (msgErr || !inserted?.id) {
-    await opts.supabase.storage.from("attachments").remove([storagePath]);
     throw new Error(msgErr?.message ?? "Message insert failed.");
   }
 
   const messageId = inserted.id as string;
+  const attachmentId = crypto.randomUUID();
+  const storagePath = encryptedAttachmentObjectPath(opts.conversationId, messageId, attachmentId);
+
+  const uploadBody = new Uint8Array(ciphertextBlob.byteLength);
+  uploadBody.set(ciphertextBlob);
+
+  await opts.uploadBlob(storagePath, new Blob([uploadBody], { type: "application/octet-stream" }), (r) => {
+    opts.onPhaseProgress(40 + Math.round(r * 55), "upload");
+  });
 
   opts.onPhaseProgress(96, "finalize");
 
@@ -103,17 +106,24 @@ export async function sendEncryptedAttachmentMessage(opts: {
 
   const attachmentRow: AttachmentInsertRow = {
     message_id: messageId,
+    conversation_id: opts.conversationId,
+    uploader_id: opts.senderUserId,
+    storage_bucket: ENCRYPTED_ATTACHMENTS_BUCKET,
     storage_path: storagePath,
     mime_type: opts.mimeType || "application/octet-stream",
     size_bytes: ciphertextBlob.byteLength,
-    encrypted_file_key_for_recipient: wrappedKey.ciphertextB64,
+    encrypted_file_key: wrappedKey.ciphertextB64,
     nonce: wrappedKey.nonceB64,
   };
 
   const { error: attErr } = await opts.supabase.from("attachments").insert(attachmentRow);
   if (attErr) {
-    await opts.supabase.from("messages").delete().eq("id", messageId);
-    await opts.supabase.storage.from("attachments").remove([storagePath]);
+    await opts.supabase
+      .from("messages")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", messageId)
+      .eq("sender_id", opts.senderUserId);
+    await opts.supabase.storage.from(ENCRYPTED_ATTACHMENTS_BUCKET).remove([storagePath]);
     throw new Error(attErr.message);
   }
 

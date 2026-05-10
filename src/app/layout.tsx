@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { AppProviders } from "@/components/providers/app-providers";
@@ -19,7 +21,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SecureTalks · Private by design",
   description:
-    "SecureTalks — end-to-end encrypted messaging: ciphertext in Supabase, plaintext only on your device. Encrypted attachments and disappearing messages.",
+    "SecureTalks — privacy-first E2EE web messenger prototype: ciphertext in Supabase, plaintext only on your unlocked device. Encrypted attachments, disappearing messages, opt-in AI.",
 };
 
 export default function RootLayout(props: Readonly<{ children: React.ReactNode }>) {
@@ -34,6 +36,8 @@ export default function RootLayout(props: Readonly<{ children: React.ReactNode }
           {props.children}
           <Toaster richColors closeButton />
         </AppProviders>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

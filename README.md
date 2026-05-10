@@ -6,9 +6,9 @@
 
 # 🔐 SecureTalks
 
-**Private by design · encrypted before it leaves your device**
+**A privacy-first E2EE web messenger prototype with server-blind encrypted storage, identity verification, encrypted attachments, disappearing messages, and opt-in AI tools.**
 
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=22&duration=2800&pause=700&color=22C55E&center=true&vCenter=true&width=780&lines=Signal-inspired+DH+%2B+AEAD+envelope;Ciphertext-only+rows+in+Postgres;Libsodium+X25519+%2B+XChaCha20-Poly1305;Encrypted+attachments+%B7+disappearing+TTL)](https://github.com/kulharshit21/SecureTalks)
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=22&duration=2800&pause=700&color=22C55E&center=true&vCenter=true&width=780&lines=Libsodium+X25519+%2B+XChaCha20-Poly1305;Ciphertext-only+rows+in+Postgres;Encrypted+attachments+%B7+disappearing+TTL;Prototype+%E2%80%94+honest+threat+model)](https://github.com/kulharshit21/SecureTalks)
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](https://react.dev/)
@@ -27,9 +27,11 @@
 
 ## Snapshot
 
-SecureTalks is a **premium-feel**, **privacy-forward web messenger**: plaintext stays inside an unlocked browser session; **Supabase** stores **only ciphertext**, structured AEAD metadata, and **encrypted blobs** in Storage. **Attachments** use an independent file key wrapped per-recipient. **Disappearing messages** set `expires_at`, hide rows via **RLS**, and ship with a **purge function** for scheduled cleanup.
+SecureTalks is a **prototype** web messenger: plaintext stays in an **unlocked browser session**; **Supabase** holds **ciphertext**, AEAD metadata, and **encrypted** Storage blobs. **Attachments** (encrypt-then-upload) are implemented for **direct** chats only — group attach is explicitly **incomplete** in UI. **Disappearing messages** use `expires_at`, **RLS**, and **`purge_expired_messages()`**. **Group chat** is a small-team MVP (symmetric epochs — **not MLS**). **Mistral-backed helpers** are **opt-in** and leave the E2EE boundary; they never run on the normal send/decrypt path.
 
-> ⚠️ Disappearing timers reduce persistence—they **cannot stop screenshots**, malware on-device capture, or a compromised endpoint.
+**Docs:** `SECURITY_CLAIMS.md` · `LIMITATIONS.md` · `DEPLOYMENT.md` · `DEMO_SCRIPT.md` · `docs/THREAT_MODEL.md` · `docs/SECURITY_MODEL.md`
+
+> ⚠️ Timers and server deletion **do not** stop screenshots, malware, or a compromised device. This project **does not** claim to be “more secure than WhatsApp” without an independent audit — see **LIMITATIONS.md**.
 
 ---
 
@@ -44,11 +46,11 @@ x25519 xchacha20poly1305 encrypted-storage disappearing-messages realtime
 
 **Short description (About → Description):**
 
-> E2EE web messenger — libsodium session cipher, ciphertext-only Supabase, encrypted attachments, disappearing TTL — Next.js 16 & React 19.
+> Privacy-first E2EE web messenger prototype — libsodium session cipher, ciphertext-only Supabase, encrypted attachments, TTL, opt-in AI — Next.js 16 & React 19.
 
 ---
 
-## Architecture (animated mentally ✨ diagrams render live on GitHub)
+## Architecture
 
 ```mermaid
 flowchart TB
@@ -110,7 +112,7 @@ sequenceDiagram
 | `attachments` | Storage path, wrapped **file key** blob (still ciphertext to infra without device secrets), MIME hint | Plain files |
 | Client compromise | N/A — attacker reads decrypted UX same as user | — |
 
-This is **not** a substitute for a full audited Signal deployment—it centralizes transport/metadata via Supabase. Read **`docs/SECURITY_RLS_CHECKLIST.md`** after migrating.
+Read **`docs/SECURITY_RLS_CHECKLIST.md`** after migrating. **`SECURITY_CLAIMS.md`** records what we do and do not promise.
 
 ---
 
@@ -143,15 +145,16 @@ Apply SQL from `supabase/migrations/` via Supabase CLI or SQL editor (order matt
 |---------|---------|
 | `npm run dev` | Local Next dev server |
 | `npm run build` | Production build |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
 | `npm run test` | Vitest unit/crypto tests |
 | `npm run test:e2e` | Playwright (configure env first) |
-| `npm run lint` | ESLint |
 
 ---
 
 ## Scheduled expiry cleanup
 
-After migrations, **`public.purge_expired_messages()`** deletes expired attachment objects then rows. Schedule with **Supabase pg_cron** or a trusted worker using **`service_role`** (already granted `EXECUTE` in migration).
+After migrations, **`public.purge_expired_messages()`** deletes expired attachment objects then rows. Schedule with **Supabase pg_cron** or a trusted worker using **`service_role`** (already granted `EXECUTE` in migration). **Never** ship the service role key to the browser.
 
 ---
 
@@ -163,6 +166,6 @@ After migrations, **`public.purge_expired_messages()`** deletes expired attachme
 
 <div align="center">
 
-<sub>Built with intent · vibe-coded UI · research-backed crypto boundaries</sub>
+<sub>Built with intent · vibe-coded UI · honest crypto boundaries</sub>
 
 </div>
