@@ -35,18 +35,9 @@
 
 ---
 
-## Suggested GitHub metadata
+## Repository on GitHub
 
-Paste these under **About → Topics**:
-
-```
-end-to-end-encryption e2ee nextjs react typescript supabase libsodium privacy
-x25519 xchacha20poly1305 encrypted-storage disappearing-messages realtime
-```
-
-**Short description (About → Description):**
-
-> Privacy-first E2EE web messenger prototype — libsodium session cipher, ciphertext-only Supabase, encrypted attachments, TTL, opt-in AI — Next.js 16 & React 19.
+**Remote:** [kulharshit21/SecureTalks](https://github.com/kulharshit21/SecureTalks) — description, topics (e.g. `privyra`, `e2ee`, `supabase`, `libsodium`), and [releases](https://github.com/kulharshit21/SecureTalks/releases) are set there.
 
 ---
 
