@@ -29,7 +29,7 @@
 
 **Privyra / SecureTalks** is a **privacy-first encrypted messaging prototype**: plaintext stays in an **unlocked browser session**; **Supabase** holds **ciphertext**, AEAD metadata, and **encrypted** Storage blobs. **Attachments** (encrypt-then-upload) use the private **`encrypted-attachments`** bucket for **direct** chats — group attach remains **incomplete** in UI. **Disappearing messages** combine `expires_at`, **RLS**, **`purge_expired_messages()`**, and **`cleanup_expired_messages()`**. **Group chat** is a small-team MVP (symmetric epochs — **not MLS**). **Opt-in AI** runs only via **`mistral-ai-assist` Edge Function** (Next proxy disabled by default); normal send/decrypt never calls AI.
 
-**Docs:** `SECURITY_CLAIMS.md` · `LIMITATIONS.md` · `DEPLOYMENT.md` · `DEMO_SCRIPT.md` · `docs/THREAT_MODEL.md` · `docs/SECURITY_MODEL.md` · `docs/PRODUCTION_ENV_CHECKLIST.md` · `docs/CRON_CLEANUP.md`
+**Docs:** `SECURITY_CLAIMS.md` · `LIMITATIONS.md` · `DEPLOYMENT.md` · `DEMO_SCRIPT.md` · `docs/THREAT_MODEL.md` · `docs/SECURITY_MODEL.md` · `docs/PRODUCTION_ENV_CHECKLIST.md` · `docs/CRON_CLEANUP.md` · `docs/privyra-graph-summary.json` (curated agent / architecture graph)
 
 > ⚠️ Timers and server deletion **do not** stop screenshots, malware, or a compromised device. This project **does not** claim to be “more secure than WhatsApp” without an independent audit — see **LIMITATIONS.md**.
 

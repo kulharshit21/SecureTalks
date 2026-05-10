@@ -1,0 +1,433 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {
+    "summary_meta": {
+      "purpose": "agent_onboarding_after_context_limit",
+      "product_ui_name": "Privyra",
+      "npm_package_name": "securetalks",
+      "repo_folder": "ciphersafe",
+      "full_graph_file": "graph.json",
+      "corpus_files": 160,
+      "approx_words": 57309,
+      "updated_note": "Curated summary; re-run graphify for full AST+semantic graph.",
+      "agent_zero_tolerance": [
+        "no_plaintext_messages_in_db",
+        "no_client_exposed_service_role_or_mistral_or_cleanup_secret",
+        "no_unversioned_change_to_CipherSafe_crypto_domain_bytes"
+      ],
+      "detect_synced_utc": "2026-05-11",
+      "source_note": "Git-tracked copy; full graph in graphify-out/graph.json (local/gitignored)."
+    },
+    "hyperedges": [
+      {
+        "id": "e2ee_send_path",
+        "label": "Encrypt in browser, store ciphertext only",
+        "nodes": [
+          "n_message_composer",
+          "n_message_crypto_core",
+          "n_supabase_messages_table",
+          "n_rls_policies"
+        ],
+        "relation": "implement",
+        "confidence": "INFERRED",
+        "confidence_score": 0.85,
+        "source_file": "docs/SECURITY_MODEL.md"
+      },
+      {
+        "id": "ai_trust_boundary",
+        "label": "Opt-in AI with consent and Edge-only secrets",
+        "nodes": [
+          "n_ai_client",
+          "n_edge_mistral",
+          "n_ai_consent_storage",
+          "n_test_no_ai_on_send"
+        ],
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "docs/EDGE_FUNCTIONS.md"
+      },
+      {
+        "id": "device_recovery_ux",
+        "label": "PIN gate, password reauth, device revoke",
+        "nodes": [
+          "n_device_gate",
+          "n_device_vault",
+          "n_route_recover_device",
+          "n_supabase_auth"
+        ],
+        "relation": "participate_in",
+        "confidence": "INFERRED",
+        "confidence_score": 0.85,
+        "source_file": "docs/SECURITY_MODEL.md"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "n_next_app",
+      "label": "Next.js App Router (Privyra UI)",
+      "file_type": "code",
+      "source_file": "src/app",
+      "role": "ui_shell"
+    },
+    {
+      "id": "n_supabase_auth",
+      "label": "Supabase Auth (session, recovery)",
+      "file_type": "code",
+      "source_file": "src/lib/supabase",
+      "role": "auth"
+    },
+    {
+      "id": "n_supabase_client",
+      "label": "Browser Supabase client (anon key)",
+      "file_type": "code",
+      "source_file": "src/lib/supabase/client.ts",
+      "role": "data_client"
+    },
+    {
+      "id": "n_supabase_server",
+      "label": "Server Supabase helpers",
+      "file_type": "code",
+      "source_file": "src/lib/supabase/server.ts",
+      "role": "server_data"
+    },
+    {
+      "id": "n_rls_policies",
+      "label": "Postgres RLS policies",
+      "file_type": "document",
+      "source_file": "supabase/migrations",
+      "role": "authorization"
+    },
+    {
+      "id": "n_migrations_chain",
+      "label": "Ordered SQL migrations (schema + RLS + storage)",
+      "file_type": "code",
+      "source_file": "supabase/migrations",
+      "role": "schema_source_of_truth"
+    },
+    {
+      "id": "n_docs_database_schema",
+      "label": "DATABASE_SCHEMA.md (human map)",
+      "file_type": "document",
+      "source_file": "docs/DATABASE_SCHEMA.md",
+      "role": "documentation"
+    },
+    {
+      "id": "n_supabase_messages_table",
+      "label": "messages table (ciphertext payload)",
+      "file_type": "code",
+      "source_file": "supabase/migrations/20260511120000_ciphersafe_schema.sql",
+      "role": "storage"
+    },
+    {
+      "id": "n_storage_attachments",
+      "label": "private encrypted-attachments bucket",
+      "file_type": "code",
+      "source_file": "src/lib/supabase/storage-buckets.ts",
+      "role": "storage"
+    },
+    {
+      "id": "n_message_crypto_core",
+      "label": "session.ts ROOT_KDF + message crypto",
+      "file_type": "code",
+      "source_file": "src/lib/crypto/session.ts",
+      "role": "crypto_critical",
+      "never_change_without": "versioned_key_rotation"
+    },
+    {
+      "id": "n_message_payload",
+      "label": "message-payload pack/unpack",
+      "file_type": "code",
+      "source_file": "src/lib/crypto/message-payload.ts",
+      "role": "crypto"
+    },
+    {
+      "id": "n_file_crypto",
+      "label": "file-crypto CipherSafe|attachment-file|v1",
+      "file_type": "code",
+      "source_file": "src/lib/crypto/file-crypto.ts",
+      "role": "crypto_critical",
+      "never_change_without": "versioned_key_rotation"
+    },
+    {
+      "id": "n_group_crypto",
+      "label": "group-crypto (group sessions)",
+      "file_type": "code",
+      "source_file": "src/lib/crypto/group-crypto.ts",
+      "role": "crypto"
+    },
+    {
+      "id": "n_message_composer",
+      "label": "Message composer (plaintext in memory only)",
+      "file_type": "code",
+      "source_file": "src/components/chat/message-composer.tsx",
+      "role": "ui"
+    },
+    {
+      "id": "n_cipher_session_store",
+      "label": "cipher-session store (client crypto state)",
+      "file_type": "code",
+      "source_file": "src/stores/cipher-session.ts",
+      "role": "state"
+    },
+    {
+      "id": "n_chat_shell",
+      "label": "Chat shell / thread orchestration",
+      "file_type": "code",
+      "source_file": "src/components/chat/chat-shell.tsx",
+      "role": "ui"
+    },
+    {
+      "id": "n_send_attachment",
+      "label": "send-encrypted-attachment pipeline",
+      "file_type": "code",
+      "source_file": "src/lib/chat/send-encrypted-attachment.ts",
+      "role": "crypto_io"
+    },
+    {
+      "id": "n_device_gate",
+      "label": "DeviceGate (PIN / unlock)",
+      "file_type": "code",
+      "source_file": "src/components/chat/device-gate.tsx",
+      "role": "ui_security"
+    },
+    {
+      "id": "n_device_vault",
+      "label": "device-vault (local key material)",
+      "file_type": "code",
+      "source_file": "src/lib/device-vault.ts",
+      "role": "crypto"
+    },
+    {
+      "id": "n_route_recover_device",
+      "label": "/recover-device recovery flow",
+      "file_type": "code",
+      "source_file": "src/app/recover-device/page.tsx",
+      "role": "ui_security"
+    },
+    {
+      "id": "n_edge_mistral",
+      "label": "Edge: mistral-ai-assist",
+      "file_type": "code",
+      "source_file": "supabase/functions/mistral-ai-assist/index.ts",
+      "role": "edge_ai"
+    },
+    {
+      "id": "n_edge_cleanup",
+      "label": "Edge: cleanup-expired-messages",
+      "file_type": "code",
+      "source_file": "supabase/functions/cleanup-expired-messages/index.ts",
+      "role": "edge_maintenance"
+    },
+    {
+      "id": "n_edge_security_audit",
+      "label": "Edge: security-audit",
+      "file_type": "code",
+      "source_file": "supabase/functions/security-audit/index.ts",
+      "role": "edge_security"
+    },
+    {
+      "id": "n_script_edge_health",
+      "label": "scripts/security/edge-health-check.ts",
+      "file_type": "code",
+      "source_file": "scripts/security/edge-health-check.ts",
+      "role": "verification"
+    },
+    {
+      "id": "n_script_two_user_smoke",
+      "label": "scripts/smoke/two-user-chat-smoke.ts",
+      "file_type": "code",
+      "source_file": "scripts/smoke/two-user-chat-smoke.ts",
+      "role": "verification"
+    },
+    {
+      "id": "n_ai_client",
+      "label": "AI client (Edge contract)",
+      "file_type": "code",
+      "source_file": "src/lib/ai/client.ts",
+      "role": "ai"
+    },
+    {
+      "id": "n_ai_consent_storage",
+      "label": "AI consent storage",
+      "file_type": "code",
+      "source_file": "src/lib/ai/consent-storage.ts",
+      "role": "ai"
+    },
+    {
+      "id": "n_test_no_ai_on_send",
+      "label": "no-ai-on-send-path tests",
+      "file_type": "code",
+      "source_file": "src/lib/ai/no-ai-on-send-path.test.ts",
+      "role": "regression_guard"
+    },
+    {
+      "id": "n_docs_security_model",
+      "label": "SECURITY_MODEL.md",
+      "file_type": "document",
+      "source_file": "docs/SECURITY_MODEL.md",
+      "role": "policy"
+    },
+    {
+      "id": "n_docs_prod_checklist",
+      "label": "PRODUCTION_ENV_CHECKLIST.md",
+      "file_type": "document",
+      "source_file": "docs/PRODUCTION_ENV_CHECKLIST.md",
+      "role": "policy"
+    },
+    {
+      "id": "n_docs_no_mock",
+      "label": "NO_MOCK_POLICY.md",
+      "file_type": "document",
+      "source_file": "docs/NO_MOCK_POLICY.md",
+      "role": "policy"
+    },
+    {
+      "id": "n_env_local_gitignored",
+      "label": ".env.local (secrets, never commit)",
+      "file_type": "document",
+      "source_file": ".env.example",
+      "role": "secrets_discipline"
+    }
+  ],
+  "links": [
+    {
+      "source": "n_next_app",
+      "target": "n_supabase_client",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "n_message_composer",
+      "target": "n_message_crypto_core",
+      "relation": "encrypts_via",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/components/chat/message-composer.tsx"
+    },
+    {
+      "source": "n_message_crypto_core",
+      "target": "n_supabase_messages_table",
+      "relation": "persists_ciphertext_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/lib/crypto/session.ts"
+    },
+    {
+      "source": "n_rls_policies",
+      "target": "n_supabase_messages_table",
+      "relation": "authorizes_access_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "supabase/migrations"
+    },
+    {
+      "source": "n_migrations_chain",
+      "target": "n_docs_database_schema",
+      "relation": "documented_by",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "docs/DATABASE_SCHEMA.md"
+    },
+    {
+      "source": "n_send_attachment",
+      "target": "n_file_crypto",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/chat/send-encrypted-attachment.ts"
+    },
+    {
+      "source": "n_send_attachment",
+      "target": "n_storage_attachments",
+      "relation": "uploads_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/lib/chat/send-encrypted-attachment.ts"
+    },
+    {
+      "source": "n_device_gate",
+      "target": "n_device_vault",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/components/chat/device-gate.tsx"
+    },
+    {
+      "source": "n_route_recover_device",
+      "target": "n_supabase_auth",
+      "relation": "reauthenticates_via",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/app/recover-device/page.tsx"
+    },
+    {
+      "source": "n_ai_client",
+      "target": "n_edge_mistral",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/ai/client.ts"
+    },
+    {
+      "source": "n_test_no_ai_on_send",
+      "target": "n_message_composer",
+      "relation": "guards_invariant_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/lib/ai/no-ai-on-send-path.test.ts"
+    },
+    {
+      "source": "n_script_edge_health",
+      "target": "n_edge_cleanup",
+      "relation": "verifies",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/security/edge-health-check.ts"
+    },
+    {
+      "source": "n_script_edge_health",
+      "target": "n_edge_mistral",
+      "relation": "verifies",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "scripts/security/edge-health-check.ts"
+    },
+    {
+      "source": "n_edge_cleanup",
+      "target": "n_supabase_messages_table",
+      "relation": "may_delete_expired_from",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "supabase/functions/cleanup-expired-messages/index.ts"
+    },
+    {
+      "source": "n_docs_prod_checklist",
+      "target": "n_env_local_gitignored",
+      "relation": "prescribes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/PRODUCTION_ENV_CHECKLIST.md"
+    },
+    {
+      "source": "n_docs_security_model",
+      "target": "n_message_crypto_core",
+      "relation": "explains",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/SECURITY_MODEL.md"
+    },
+    {
+      "source": "n_cipher_session_store",
+      "target": "n_message_crypto_core",
+      "relation": "holds_session_material_for",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "src/stores/cipher-session.ts"
+    }
+  ]
+}

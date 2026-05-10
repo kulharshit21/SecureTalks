@@ -18,12 +18,16 @@ type LatestMessageProbe = {
   sender_device_id: string;
 };
 
+type PillTone = "loading" | "success" | "warning" | "error";
+
 export function SecurityDashboard(props: { userId: string }) {
   const supabase = useSupabase();
 
   const [vaultPresent, setVaultPresent] = useState<boolean | null>(null);
   const [messagesProbe, setMessagesProbe] = useState<LatestMessageProbe | null>(null);
   const [myPublicKey, setMyPublicKey] = useState<string | null>(null);
+  /** "loading" | "synced" | "pending" — pending = no device row or keys not published yet (not an error). */
+  const [bundleStatus, setBundleStatus] = useState<"loading" | "synced" | "pending">("loading");
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +48,10 @@ export function SecurityDashboard(props: { userId: string }) {
 
       const { data: device } = await supabase.from("devices").select("id").eq("user_id", props.userId).maybeSingle();
       if (!device?.id) {
-        setMyPublicKey(null);
+        if (!cancelled) {
+          setMyPublicKey(null);
+          setBundleStatus("pending");
+        }
         return;
       }
 
@@ -52,8 +59,12 @@ export function SecurityDashboard(props: { userId: string }) {
 
       if (cancelled) return;
       setMyPublicKey(bundleJson ?? null);
+      setBundleStatus(bundleJson ? "synced" : "pending");
     })().catch(() => {
-      if (!cancelled) setVaultPresent(false);
+      if (!cancelled) {
+        setVaultPresent(false);
+        setBundleStatus("pending");
+      }
     });
 
     return () => {
@@ -82,6 +93,9 @@ export function SecurityDashboard(props: { userId: string }) {
   const bundleOk = Boolean(myPublicKey);
   const probeOk = Boolean(messagesProbe);
 
+  const deviceKeysTone: PillTone =
+    bundleStatus === "loading" ? "loading" : bundleStatus === "synced" ? "success" : "warning";
+
   return (
     <div className="space-y-6">
       <div className="relative overflow-hidden rounded-[1.35rem] border border-border/60 bg-gradient-to-br from-card/90 via-card/60 to-muted/20 p-6 shadow-lg ring-1 ring-black/[0.03] backdrop-blur-xl dark:from-card/50 dark:via-card/35 dark:to-muted/10 dark:ring-white/[0.05] md:p-8">
@@ -99,8 +113,8 @@ export function SecurityDashboard(props: { userId: string }) {
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2 md:mt-0 md:justify-end">
-            <StatusPill ok={vaultPresent === true} label="Vault" loading={vaultPresent === null} />
-            <StatusPill ok={bundleOk} label="Device keys" />
+            <StatusPill tone={vaultPresent === null ? "loading" : vaultOk ? "success" : "error"} label="Vault" />
+            <StatusPill tone={deviceKeysTone} label="Device keys" />
           </div>
         </div>
 
@@ -115,16 +129,24 @@ export function SecurityDashboard(props: { userId: string }) {
           <StatTile
             icon={Fingerprint}
             title="Public bundle"
-            value={myPublicKey ? "Synced to Supabase" : "Not registered"}
-            hint={keyFingerprint ? `DH prefix: ${keyFingerprint}` : "Complete device setup to publish keys."}
-            variant={bundleOk ? "good" : "neutral"}
+            value={myPublicKey ? "Synced to Supabase" : "Not published yet"}
+            hint={
+              keyFingerprint
+                ? `DH prefix: ${keyFingerprint}`
+                : "Finish device setup to publish public keys (expected until first successful registration)."
+            }
+            variant={bundleOk ? "good" : "pending"}
           />
           <StatTile
             icon={ShieldCheck}
             title="Latest ciphertext row"
-            value={messagesProbe ? "Envelope retrieved" : "No row / no access"}
-            hint={messagesProbe ? "Format looks like opaque payload — not human language." : "Empty DB or RLS blocked."}
-            variant={probeOk ? "good" : "neutral"}
+            value={messagesProbe ? "Envelope retrieved" : "No rows visible"}
+            hint={
+              messagesProbe
+                ? "Format looks like opaque payload — not human language."
+                : "Normal for an empty inbox, or RLS returns only messages in chats you belong to."
+            }
+            variant={probeOk ? "good" : "pending"}
           />
         </div>
 
@@ -137,7 +159,7 @@ export function SecurityDashboard(props: { userId: string }) {
           </div>
           {!messagesProbe ? (
             <p className="rounded-2xl border border-dashed border-border/70 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-              No rows returned — empty database or policy blocked the read.
+              No row returned — often an empty project or RLS scoped to your conversations (not necessarily a failure).
             </p>
           ) : (
             <div className="rounded-2xl border border-border/60 bg-muted/[0.12] p-4 font-mono text-[11px] leading-relaxed shadow-inner md:p-5 md:text-xs">
@@ -169,17 +191,26 @@ export function SecurityDashboard(props: { userId: string }) {
   );
 }
 
-function StatusPill(props: { ok: boolean; label: string; loading?: boolean }) {
+function StatusPill(props: { tone: PillTone; label: string }) {
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide",
-        props.loading && "border-border/60 bg-muted/30 text-muted-foreground",
-        !props.loading && props.ok && "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-        !props.loading && !props.ok && "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-400",
+        props.tone === "loading" && "border-border/60 bg-muted/30 text-muted-foreground",
+        props.tone === "success" && "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+        props.tone === "warning" && "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-400",
+        props.tone === "error" && "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-400",
       )}
     >
-      <span className={cn("size-1.5 rounded-full", props.loading ? "animate-pulse bg-muted-foreground/60" : props.ok ? "bg-emerald-500" : "bg-rose-500")} />
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          props.tone === "loading" && "animate-pulse bg-muted-foreground/60",
+          props.tone === "success" && "bg-emerald-500",
+          props.tone === "warning" && "bg-amber-500",
+          props.tone === "error" && "bg-rose-500",
+        )}
+      />
       {props.label}
     </span>
   );
@@ -190,7 +221,7 @@ function StatTile(props: {
   title: string;
   value: string;
   hint: string;
-  variant: "good" | "bad" | "neutral";
+  variant: "good" | "bad" | "neutral" | "pending";
 }) {
   const Icon = props.icon;
   return (
@@ -199,6 +230,7 @@ function StatTile(props: {
         "relative flex flex-col rounded-2xl border p-5 transition-colors",
         props.variant === "good" && "border-emerald-500/25 bg-emerald-500/[0.06]",
         props.variant === "bad" && "border-rose-500/25 bg-rose-500/[0.06]",
+        props.variant === "pending" && "border-amber-500/20 bg-amber-500/[0.04] dark:border-amber-500/25",
         props.variant === "neutral" && "border-border/55 bg-background/50 dark:bg-background/20",
       )}
     >
