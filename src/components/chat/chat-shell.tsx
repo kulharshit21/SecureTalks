@@ -10,6 +10,7 @@ import { DeviceGate } from "@/components/chat/device-gate";
 import { PrivacyPanelSheet, PrivacyPanelTrigger } from "@/components/chat/privacy-panel-sheet";
 import { PrivacySidePanel } from "@/components/chat/privacy-side-panel";
 import { ThemeToggle } from "@/components/chat/theme-toggle";
+import { buttonVariants } from "@/components/ui/button";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +101,13 @@ export function ChatShell(props: { userId: string; children: React.ReactNode }) 
             </div>
 
             <div className="flex items-center gap-2">
+              <Link
+                href="/security"
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden rounded-xl gap-2 sm:inline-flex")}
+              >
+                <Shield className="size-4" aria-hidden />
+                Audit
+              </Link>
               <PrivacyPanelTrigger
                 className="xl:hidden"
                 collapsed

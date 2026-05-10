@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Lock, Server } from "lucide-react";
+import { Database, Lock, Server, Sparkles } from "lucide-react";
 
 import { SecurityDashboard } from "@/components/chat/security-dashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -50,6 +50,27 @@ export function PrivacyPanelContent(props: { userId: string }) {
               <p className="text-sm font-medium leading-none">Keys stay on device</p>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Private key material is wrapped with your device PIN and stored in IndexedDB only. Never uploaded.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
+              <Sparkles className="size-4 text-amber-600 dark:text-amber-400" aria-hidden />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium leading-none">Optional AI (Mistral)</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                AI features are opt-in. Private messages are never analyzed automatically. Content reaches Mistral only when you
+                trigger Rewrite, summarize export, abuse analysis, or smart reply and confirm. Policy:{" "}
+                <a
+                  href="https://github.com/kulharshit21/SecureTalks/blob/main/docs/AI_PRIVACY.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-foreground underline underline-offset-2"
+                >
+                  docs/AI_PRIVACY.md
+                </a>
+                .
               </p>
             </div>
           </div>

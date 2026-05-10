@@ -1,3 +1,4 @@
+import { GROUP_ASSOCIATED_RECIPIENT_ID } from "./group-crypto";
 import type { EncryptedWirePayload } from "./types";
 import { CRYPTO_PROTOCOL_ID } from "./types";
 
@@ -6,6 +7,7 @@ export interface MessageAssociatedDataWire {
   conversation_id: string;
   sender_device_id: string;
   recipient_device_id: string;
+  group_epoch?: number;
 }
 
 export interface MessageInsertRow {
@@ -33,6 +35,7 @@ export function buildMessageInsertRow(input: {
     conversationId: string;
     senderDeviceId: string;
     recipientDeviceId: string;
+    groupEpoch?: number;
   };
   algorithm?: string;
   expiresAtIso?: string | null;
@@ -41,8 +44,12 @@ export function buildMessageInsertRow(input: {
     timestamp_ms: input.meta.timestampMs,
     conversation_id: input.meta.conversationId,
     sender_device_id: input.meta.senderDeviceId,
-    recipient_device_id: input.meta.recipientDeviceId,
+    recipient_device_id:
+      input.meta.groupEpoch !== undefined ? GROUP_ASSOCIATED_RECIPIENT_ID : input.meta.recipientDeviceId,
   };
+  if (input.meta.groupEpoch !== undefined) {
+    associated_data.group_epoch = input.meta.groupEpoch;
+  }
 
   const row: MessageInsertRow = {
     conversation_id: input.conversationId,

@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { MessageSquarePlus, Search, UserRound } from "lucide-react";
+import { MessageSquarePlus, Search, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   createDirectConversationRpc,
   fetchPrimaryPeerPublicBundle,
-  listConversationSummaries,
+  listInboxConversations,
   searchProfilesRpc,
-  type ConversationSummary,
+  type InboxConversation,
 } from "@/lib/conversation-service";
+import { createGroupRpc, fetchActiveMemberUserIds, publishGroupEpochKey } from "@/lib/group-service";
 import { parsePublicKeyBundleJson } from "@/lib/crypto/session";
 import { cn } from "@/lib/utils";
 import { useSupabase } from "@/components/providers/supabase-provider";
@@ -36,8 +37,10 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
   const supabase = useSupabase();
   const router = useRouter();
   const cipherSession = useCipherSession();
+  const cipher = cipherSession.cipher;
+  const deviceId = cipherSession.deviceId;
 
-  const [summaries, setSummaries] = useState([] as ConversationSummary[]);
+  const [inbox, setInbox] = useState([] as InboxConversation[]);
   const [loading, setLoading] = useState(true);
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -49,9 +52,15 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([] as { id: string; username: string; display_name: string }[]);
 
+  const [groupDlgOpen, setGroupDlgOpen] = useState(false);
+  const [groupTitle, setGroupTitle] = useState("");
+  const [groupQuery, setGroupQuery] = useState("");
+  const [groupResults, setGroupResults] = useState([] as { id: string; username: string; display_name: string }[]);
+  const [selectedPeers, setSelectedPeers] = useState<string[]>([]);
+
   async function reloadSummaries() {
-    const rows = await listConversationSummaries(supabase, props.userId);
-    setSummaries(rows);
+    const rows = await listInboxConversations(supabase, props.userId);
+    setInbox(rows);
   }
 
   useEffect(() => {
@@ -112,6 +121,28 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
     };
   }, [props.userId, query, supabase]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const handle = window.setTimeout(async () => {
+      const q = groupQuery.trim();
+      if (!groupDlgOpen || q.length < 2) {
+        setGroupResults([]);
+        return;
+      }
+      try {
+        const rows = await searchProfilesRpc(supabase, q);
+        if (cancelled) return;
+        setGroupResults(rows);
+      } catch {
+        if (!cancelled) toast.error("Search failed.");
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [groupDlgOpen, groupQuery, supabase]);
+
   const initials = useMemo(() => {
     const basis = displayName || username || "You";
     const parts = basis.trim().split(/\s+/).slice(0, 2);
@@ -166,6 +197,44 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
     }
   }
 
+  function togglePeerSelected(userId: string) {
+    setSelectedPeers((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]));
+  }
+
+  async function submitNewGroup() {
+    const title = groupTitle.trim();
+    if (!title) {
+      toast.error("Enter a group title.");
+      return;
+    }
+    if (!cipher || !deviceId) {
+      toast.error("Unlock keys on this device before creating a group.");
+      return;
+    }
+    try {
+      const convId = await createGroupRpc(supabase, title, selectedPeers);
+      const members = await fetchActiveMemberUserIds(supabase, convId);
+      await publishGroupEpochKey({
+        supabase,
+        cipher,
+        conversationId: convId,
+        adminUserId: props.userId,
+        adminDeviceId: deviceId,
+        memberUserIds: members,
+      });
+      toast.success("Group created with epoch 1 keys.");
+      setGroupDlgOpen(false);
+      setGroupTitle("");
+      setGroupQuery("");
+      setSelectedPeers([]);
+      await reloadSummaries();
+      props.onNavigate?.();
+      router.push(`/chat/${convId}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create group.");
+    }
+  }
+
   async function signOut() {
     cipherSession.lock();
     await supabase.auth.signOut();
@@ -215,7 +284,7 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
         </div>
       </div>
 
-      <div className="px-4 pb-3">
+      <div className="grid grid-cols-2 gap-2 px-4 pb-3">
         <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
           <Button
             className="h-10 w-full rounded-xl font-medium shadow-none"
@@ -269,6 +338,66 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
             </div>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={groupDlgOpen} onOpenChange={setGroupDlgOpen}>
+          <Button
+            className="h-10 w-full rounded-xl font-medium shadow-none"
+            variant="outline"
+            type="button"
+            onClick={() => setGroupDlgOpen(true)}
+          >
+            <Users className="mr-2 size-4" aria-hidden />
+            Group
+          </Button>
+          <DialogContent className="gap-0 overflow-hidden border-border/70 p-0 sm:max-w-md">
+            <DialogHeader className="border-b border-border/60 px-6 py-5 text-left">
+              <DialogTitle className="font-semibold tracking-tight">New encrypted group</DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                Symmetric epoch keys are wrapped to each member&apos;s primary device. Not MLS — fine for small MVP groups only.
+              </p>
+            </DialogHeader>
+            <div className="space-y-3 px-6 py-4">
+              <Input
+                className="rounded-xl"
+                placeholder="Group title"
+                value={groupTitle}
+                onChange={(e) => setGroupTitle(e.target.value)}
+              />
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  className="h-11 rounded-xl pl-10"
+                  value={groupQuery}
+                  onChange={(e) => setGroupQuery(e.target.value)}
+                  placeholder="Search members @username"
+                />
+              </div>
+              <div className="max-h-44 overflow-y-auto rounded-2xl border border-border/60 bg-muted/15">
+                {groupQuery.trim().length < 2 ? (
+                  <p className="px-4 py-8 text-center text-xs text-muted-foreground">Type two characters to search.</p>
+                ) : groupResults.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-xs text-muted-foreground">No matches.</p>
+                ) : (
+                  groupResults.map((r) => (
+                    <label
+                      key={r.id}
+                      className="flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 text-sm last:border-b-0 hover:bg-muted/35"
+                    >
+                      <input type="checkbox" checked={selectedPeers.includes(r.id)} onChange={() => togglePeerSelected(r.id)} />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-medium">{r.username}</span>
+                        <span className="block truncate text-xs text-muted-foreground">{r.display_name}</span>
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <Button className="w-full rounded-xl font-medium" type="button" onClick={() => void submitNewGroup()}>
+                Create & distribute epoch 1 key
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Separator className="opacity-60" />
@@ -281,7 +410,7 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
                 <Skeleton key={i} className="h-[72px] rounded-2xl" />
               ))}
             </div>
-          ) : summaries.length === 0 ? (
+          ) : inbox.length === 0 ? (
             <div className="mx-2 mt-8 rounded-2xl border border-dashed border-border/70 bg-muted/10 px-6 py-14 text-center animate-in fade-in duration-500">
               <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/8">
                 <MessageSquarePlus className="size-6 text-primary/80" aria-hidden />
@@ -295,7 +424,7 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
               </Button>
             </div>
           ) : (
-            summaries.map((s) => <SidebarRow key={s.conversationId} summary={s} onNavigate={props.onNavigate} />)
+            inbox.map((row) => <SidebarRow key={row.conversationId} row={row} onNavigate={props.onNavigate} />)
           )}
         </div>
       </ScrollArea>
@@ -333,19 +462,49 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
   );
 }
 
-function SidebarRow(props: { summary: ConversationSummary; onNavigate?: () => void }) {
+function SidebarRow(props: { row: InboxConversation; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const active = pathname === `/chat/${props.summary.conversationId}`;
+  const active = pathname === `/chat/${props.row.conversationId}`;
 
   const peerInitials = useMemo(() => {
-    const basis = props.summary.peerDisplayName || props.summary.peerUsername;
+    if (props.row.kind !== "direct") return "?";
+    const basis = props.row.peerDisplayName || props.row.peerUsername;
     const parts = basis.trim().split(/\s+/).slice(0, 2);
     return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
-  }, [props.summary.peerDisplayName, props.summary.peerUsername]);
+  }, [props.row]);
+
+  if (props.row.kind === "group") {
+    const g = props.row;
+    return (
+      <Link
+        href={`/chat/${g.conversationId}`}
+        prefetch={false}
+        onClick={() => props.onNavigate?.()}
+        className={cn(
+          "flex items-center gap-3 rounded-2xl px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          active ? "bg-muted/70 ring-1 ring-border/60" : "hover:bg-muted/45",
+        )}
+      >
+        <Avatar className="size-11 shrink-0 border border-border/50">
+          <AvatarFallback className="bg-secondary text-sm font-semibold">
+            <Users className="size-5" aria-hidden />
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold leading-tight">{g.title}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {g.memberCount} members · {g.myRole}
+          </p>
+        </div>
+      </Link>
+    );
+  }
+
+  const d = props.row;
 
   return (
     <Link
-      href={`/chat/${props.summary.conversationId}`}
+      href={`/chat/${d.conversationId}`}
       prefetch={false}
       onClick={() => props.onNavigate?.()}
       className={cn(
@@ -357,8 +516,8 @@ function SidebarRow(props: { summary: ConversationSummary; onNavigate?: () => vo
         <AvatarFallback className="bg-secondary text-sm font-semibold">{peerInitials}</AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold leading-tight">{props.summary.peerDisplayName}</p>
-        <p className="truncate text-xs text-muted-foreground">@{props.summary.peerUsername}</p>
+        <p className="truncate text-sm font-semibold leading-tight">{d.peerDisplayName}</p>
+        <p className="truncate text-xs text-muted-foreground">@{d.peerUsername}</p>
       </div>
     </Link>
   );

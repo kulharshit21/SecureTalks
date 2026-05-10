@@ -29,3 +29,32 @@ The façade in `src/lib/crypto/types.ts` is the stable seam:
 - Persist protocol-specific state client-side (still never upload private material).
 
 See `THREAT_MODEL.md` for adversary assumptions.
+
+---
+
+## Operational threat scenarios (high level)
+
+| Scenario | Impact inside MVP scope | Notes |
+| -------- | ------------------------ | ----- |
+| **Malicious Supabase operator / buggy SQL migration** | Can reorder, delay, drop ciphertext; attempt privilege escalation via SECURITY DEFINER RPCs; cannot derive plaintext without breaking cryptography assumptions | Reduce blast radius with branching previews, migration reviews, least-privilege CI secrets. |
+| **Stolen Postgres snapshot** | Reveals ciphertext, structured metadata (membership graphs, timestamps, attachment envelope blobs); plaintext stays unavailable unless keys guessed | Rotate leaked JWT/signing keys; assume ciphertext archival persists offline. |
+| **Compromised user laptop/browser** | Malware can read decrypted transcripts after PIN unlock; capture keystrokes; scrape IndexedDB | Out-of-band device revocation UX remains roadmap debt (`devices.revoked_at` starts posture only). |
+| **Revoked or stale device** | Old ciphertext might remain decryptable for epochs wrapped before revocation unless rotations purge visibility client-side | Group MVP rotates symmetric epochs administratively — partial hygiene until MLS/device transcripts shrink automatically. |
+| **Malicious group member** | Can screenshot plaintext once decrypted on-device; can spam ciphertext or withhold rotations | Cryptographic removal requires MLS-grade PCS semantics — MVP warns admins to rotate after removals but former insiders retain historic ciphertext locally. |
+| **Screenshots / screen recording / cloud backups** | Human-factor leakage orthogonal to transport crypto | Copy warns persist throughout CipherSafe UI. |
+| **Push / desktop notifications** | OS surfaces snippets supplied by browser/OS integrations outside ciphertext envelope today | Disable previews server/client-wide until payloads omit sensitive previews entirely (tracked backlog). |
+
+## MLS roadmap
+
+CipherSafe group chats intentionally ship as **symmetric epoch keys wrapped pairwise** to demonstrate UX hooks without claiming Messaging Layer Security compliance.
+
+**Roadmap milestones**
+
+1. **Canonical handshake transcript logging** — pin MLS CipherSuites + credential formats ahead of implementation spikes.
+2. **Rust/Core MLS adoption spike** — integrate audited MLS crate behind existing ciphertext envelopes (`messages.algorithm` already distinguishes payloads).
+3. **Delivery-service secrecy upgrades** — ensure MLS epochs propagate without leaking epoch graphs via plaintext analytics columns (still zero plaintext columns guarantee).
+4. **Interop testing harness** — automated vectors vs reference MLS implementations prior to marketing “production-grade groups.”
+
+Until those milestones ship, documentation and UI must describe group crypto as **prototype / small-group MVP**.
+
+See also `docs/GROUP_E2EE_MVP.md`.

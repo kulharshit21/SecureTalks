@@ -1,6 +1,6 @@
 # Database schema overview
 
-Authoritative SQL lives in `supabase/migrations/20260511120000_ciphersafe_schema.sql`. Below is a conceptual map for engineers.
+Authoritative SQL lives in `supabase/migrations/20260511120000_ciphersafe_schema.sql` and follow-ons such as `20260516120000_group_chat_foundation.sql`. Below is a conceptual map for engineers.
 
 ## Entities
 
@@ -43,6 +43,14 @@ Sender `sent` receipt is inserted automatically via trigger when a message row i
 
 Metadata linking ciphertext blobs inside Storage (`storage_path`, integrity hash placeholder).
 
+### `group_session_epochs`
+
+Per-group symmetric epochs (`conversation_id`, `epoch`, `created_by_device_id`). Stores **no raw keys** — clients derive epoch secrets after decrypting pairwise wraps.
+
+### `group_key_wraps`
+
+Pairwise ciphertext (`ciphertext`, `nonce`, `associated_data`) wrapping the epoch symmetric key for `(recipient_device_id, epoch)`. Enables MVP group messaging without plaintext key material on Supabase.
+
 ### `security_events`
 
 Structured JSON audit entries without bodies (e.g., `device_registered`).
@@ -50,6 +58,10 @@ Structured JSON audit entries without bodies (e.g., `device_registered`).
 ## RPC helpers
 
 - `create_direct_conversation(peer_user_id uuid)` — SECURITY DEFINER helper that inserts both membership rows atomically under RLS elevation.
+- `create_group(title text, member_user_ids uuid[])` — creates `conversation_kind='group'`, seeds membership (`admin` caller, `member` peers).
+- `group_add_member(conversation_id uuid, target_user_id uuid)` — admin-only membership insert with duplicate guards.
+- `group_remove_member(conversation_id uuid, target_user_id uuid)` — admin removes member or self-leave path.
+- `security_audit_snapshot()` — aggregated posture for `/security` (RLS flags, plaintext-column probes on `messages`, storage bucket ACL hints). Added in `supabase/migrations/20260516120000_group_chat_foundation.sql`.
 
 ## Storage policies
 
@@ -57,4 +69,4 @@ Bucket `attachments` requires conversation membership join before `SELECT`, and 
 
 ## Realtime publication
 
-The migration adds tables to `supabase_realtime` publication so authorized clients receive ciphertext inserts without polling.
+Migrations add tables to `supabase_realtime` so authorized clients receive ciphertext inserts (including `group_session_epochs` / `group_key_wraps` where enabled) without polling.

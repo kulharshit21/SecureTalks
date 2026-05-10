@@ -57,6 +57,8 @@ export interface MessageAssociatedData {
   senderDeviceId: string;
   recipientDeviceId: string;
   timestampMs: number;
+  /** Present for symmetric group messages — binds ciphertext to an epoch. */
+  groupEpoch?: number;
 }
 
 /** Wire payload stored in `messages` table (ephemeral DH pk concatenated before AEAD bytes inside ciphertext field). */

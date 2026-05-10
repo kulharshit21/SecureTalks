@@ -1,16 +1,20 @@
 "use client";
 
-import { Paperclip, X } from "lucide-react";
+import { Paperclip, Sparkles, Wand2, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { sendEncryptedAttachmentMessage } from "@/lib/chat/send-encrypted-attachment";
 import { buildMessageInsertRow } from "@/lib/crypto/message-payload";
+import { encryptGroupUtf8, GROUP_ASSOCIATED_RECIPIENT_ID, GROUP_PROTOCOL_ID } from "@/lib/crypto/group-crypto";
 import type { MessageAssociatedData, ParsedPublicKeyBundle } from "@/lib/crypto/types";
 import { EXPIRY_CHOICES, expiresAtIsoFromTtlMs, type ExpiryChoiceId } from "@/lib/message-expiry";
 import { useSupabase } from "@/components/providers/supabase-provider";
+import { AiConsentDialog } from "@/components/chat/ai-consent-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { callMistralProxy } from "@/lib/ai/client";
+import { hasAcceptedAiConsent, setAiConsentAccepted } from "@/lib/ai/consent-storage";
 import { uploadEncryptedAttachmentViaXhr } from "@/lib/supabase/storage-upload-xhr";
 import { useCipherSession } from "@/stores/cipher-session";
 
@@ -18,12 +22,17 @@ const PLAINTEXT_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024;
 
 export function MessageComposer(props: {
   conversationId: string;
+  conversationKind: "direct" | "group";
   senderUserId: string;
   peerBundle: ParsedPublicKeyBundle | null;
   peerDeviceId: string | null;
+  /** Latest symmetric epoch context for group sends (null while wraps load). */
+  groupSendCtx?: { epoch: number; groupKey: Uint8Array } | null;
   disabled: boolean;
   onTypingBurst: () => void;
   onSent: () => void;
+  /** Peer-visible plaintext lines already decrypted on-device (newest last). Used only after explicit smart-reply click. */
+  peerReplyContextLines?: string[];
 }) {
   const supabase = useSupabase();
   const cipher = useCipherSession((s) => s.cipher);
@@ -34,20 +43,93 @@ export function MessageComposer(props: {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [expiryChoice, setExpiryChoice] = useState<ExpiryChoiceId>("off");
   const [progress, setProgress] = useState<{ pct: number; phase: string } | null>(null);
+  const [aiGateOpen, setAiGateOpen] = useState(false);
+  const [aiConsentAck, setAiConsentAck] = useState(() => hasAcceptedAiConsent());
+  const pendingAi = useRef<null | (() => void)>(null);
 
   const lastTypingSentAt = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const peerLines = props.peerReplyContextLines ?? [];
+
+  function runWithAiConsent(run: () => void) {
+    if (hasAcceptedAiConsent()) {
+      setAiConsentAck(true);
+      run();
+      return;
+    }
+    if (aiConsentAck) {
+      run();
+      return;
+    }
+    pendingAi.current = run;
+    setAiGateOpen(true);
+  }
+
+  async function rewriteDraftWithAi() {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      toast.error("Type a draft to rewrite.");
+      return;
+    }
+    runWithAiConsent(async () => {
+      setBusy(true);
+      try {
+        const out = await callMistralProxy({ purpose: "rewrite_draft", payload: trimmed });
+        if ("error" in out) {
+          toast.error(out.error);
+          return;
+        }
+        setText(out.text);
+        toast.success("Draft rewritten locally — review before sending.");
+      } finally {
+        setBusy(false);
+      }
+    });
+  }
+
+  async function suggestSmartReply() {
+    const slice = peerLines.slice(-15).filter((l) => l.trim().length > 0);
+    if (slice.length === 0) {
+      toast.error("No visible peer messages to base a reply on.");
+      return;
+    }
+    const payload = slice.join("\n---\n");
+    runWithAiConsent(async () => {
+      setBusy(true);
+      try {
+        const out = await callMistralProxy({ purpose: "smart_reply_context", payload });
+        if ("error" in out) {
+          toast.error(out.error);
+          return;
+        }
+        setText((prev) => (prev.trim().length > 0 ? `${prev.trim()}\n${out.text}` : out.text));
+        toast.success("Suggestion inserted — edit before sending.");
+      } finally {
+        setBusy(false);
+      }
+    });
+  }
+
   const ttlMs = useMemo(() => EXPIRY_CHOICES.find((c) => c.id === expiryChoice)?.ttlMs ?? null, [expiryChoice]);
 
-  const keysReady = Boolean(props.peerBundle && props.peerDeviceId);
+  const isDirect = props.conversationKind === "direct";
+
+  const keysReady = isDirect ? Boolean(props.peerBundle && props.peerDeviceId) : Boolean(props.groupSendCtx);
 
   const canSendText = Boolean(
-    cipher && deviceId && props.peerDeviceId && props.peerBundle && text.trim().length > 0 && !props.disabled && !busy,
+    cipher &&
+      deviceId &&
+      text.trim().length > 0 &&
+      !props.disabled &&
+      !busy &&
+      keysReady &&
+      (isDirect ? props.peerDeviceId && props.peerBundle : props.groupSendCtx),
   );
 
   const canSendAttachment = Boolean(
-    cipher &&
+    isDirect &&
+      cipher &&
       deviceId &&
       props.peerDeviceId &&
       props.peerBundle &&
@@ -68,7 +150,55 @@ export function MessageComposer(props: {
 
   async function sendTextMessage() {
     const trimmed = text.trim();
-    if (!cipher || !deviceId || !props.peerDeviceId || !props.peerBundle || trimmed.length === 0) return;
+    if (!cipher || !deviceId || trimmed.length === 0) return;
+
+    if (props.conversationKind === "group") {
+      const ctx = props.groupSendCtx;
+      if (!ctx) return;
+      setBusy(true);
+      try {
+        const timestampMs = Date.now();
+        const expiresAtIso = expiresAtIsoFromTtlMs(ttlMs, timestampMs);
+        const encrypted = await encryptGroupUtf8(trimmed, ctx.groupKey, {
+          conversationId: props.conversationId,
+          senderDeviceId: deviceId,
+          timestampMs,
+          groupEpoch: ctx.epoch,
+        });
+        const row = buildMessageInsertRow({
+          conversationId: props.conversationId,
+          senderUserId: props.senderUserId,
+          senderDeviceId: deviceId,
+          encrypted,
+          algorithm: GROUP_PROTOCOL_ID,
+          meta: {
+            timestampMs,
+            conversationId: props.conversationId,
+            senderDeviceId: deviceId,
+            recipientDeviceId: GROUP_ASSOCIATED_RECIPIENT_ID,
+            groupEpoch: ctx.epoch,
+          },
+          expiresAtIso,
+        });
+
+        const { error } = await supabase.from("messages").insert(row);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+
+        setText("");
+        props.onSent();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Send failed.";
+        toast.error(msg);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (!props.peerDeviceId || !props.peerBundle) return;
 
     setBusy(true);
     try {
@@ -211,7 +341,9 @@ export function MessageComposer(props: {
               ? pendingFile
                 ? "Optional caption (encrypted with the file manifest)…"
                 : "Write a message… (encrypted before sync)"
-              : "Waiting for peer device keys…"
+              : isDirect
+                ? "Waiting for peer device keys…"
+                : "Waiting for group encryption keys…"
           }
           className="min-h-[96px] resize-none rounded-2xl border-border/60 bg-muted/10 shadow-inner shadow-black/[0.03]"
           onKeyDown={(e) => {
@@ -221,6 +353,49 @@ export function MessageComposer(props: {
             }
           }}
         />
+
+        <AiConsentDialog
+          open={aiGateOpen}
+          onOpenChange={(o) => {
+            setAiGateOpen(o);
+            if (!o) pendingAi.current = null;
+          }}
+          onAccept={() => {
+            setAiConsentAccepted();
+            setAiConsentAck(true);
+            const next = pendingAi.current;
+            pendingAi.current = null;
+            next?.();
+          }}
+        />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="rounded-xl gap-2"
+            disabled={props.disabled || busy || !keysReady || text.trim().length === 0}
+            onClick={() => void rewriteDraftWithAi()}
+          >
+            <Wand2 className="size-3.5" aria-hidden />
+            Rewrite draft (AI)
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="rounded-xl gap-2"
+            disabled={props.disabled || busy || !keysReady || peerLines.length === 0}
+            onClick={() => void suggestSmartReply()}
+          >
+            <Sparkles className="size-3.5" aria-hidden />
+            Suggest reply (AI)
+          </Button>
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            AI runs only when you click — nothing is sent on normal Send.
+          </p>
+        </div>
 
         {progress ? (
           <div className="space-y-1">

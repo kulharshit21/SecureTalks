@@ -27,3 +27,5 @@
 
 - Upgrade to **Signal Protocol / MLS** for PCS/FS.
 - Add signed **security events** correlation IDs for tamper-evident auditing (still ciphertext-only payloads).
+
+For operational scenarios (malicious operator, stolen DB, revoked device, malicious insider, screenshots, push previews), see the expanded notes and MLS roadmap in `SECURITY_MODEL.md`. Group MVP cryptography is documented in `GROUP_E2EE_MVP.md`.

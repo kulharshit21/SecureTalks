@@ -4,12 +4,24 @@ import type { PublicKeyBundleRecord } from "@/lib/crypto/types";
 import { CRYPTO_PROTOCOL_VERSION } from "@/lib/crypto/types";
 import { publicBundleRecordToJson } from "@/lib/crypto/session";
 
-export interface ConversationSummary {
-  conversationId: string;
-  peerUserId: string;
-  peerUsername: string;
-  peerDisplayName: string;
-}
+export type InboxConversation =
+  | {
+      kind: "direct";
+      conversationId: string;
+      peerUserId: string;
+      peerUsername: string;
+      peerDisplayName: string;
+    }
+  | {
+      kind: "group";
+      conversationId: string;
+      title: string;
+      memberCount: number;
+      myRole: "admin" | "member";
+    };
+
+/** @deprecated Prefer InboxConversation — kept for older call sites. */
+export type ConversationSummary = Extract<InboxConversation, { kind: "direct" }>;
 
 type DeviceKeyRow = {
   id: string;
@@ -36,19 +48,27 @@ function bundleRecordFromDeviceRow(device: DeviceKeyRow): PublicKeyBundleRecord 
   };
 }
 
-export async function listConversationSummaries(
+export async function listInboxConversations(
   supabase: SupabaseClient,
   userId: string,
-): Promise<ConversationSummary[]> {
+): Promise<InboxConversation[]> {
   const { data: mine, error: mineErr } = await supabase
     .from("conversation_members")
-    .select("conversation_id")
+    .select(
+      `
+      conversation_id,
+      role,
+      conversations!inner ( type, title )
+    `,
+    )
     .eq("user_id", userId)
     .is("left_at", null);
 
   if (mineErr) throw mineErr;
-  const ids = (mine ?? []).map((r) => r.conversation_id as string);
-  if (ids.length === 0) return [];
+  const rows = mine ?? [];
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.conversation_id as string);
 
   const { data: members, error: memErr } = await supabase
     .from("conversation_members")
@@ -58,48 +78,81 @@ export async function listConversationSummaries(
 
   if (memErr) throw memErr;
 
-  const peerByConversation = new Map<string, string>();
+  const countByConversation = new Map<string, number>();
+  const directPeerByConversation = new Map<string, string>();
+
   for (const row of members ?? []) {
     const cid = row.conversation_id as string;
-    const uid = row.user_id as string;
-    if (uid === userId) continue;
-    peerByConversation.set(cid, uid);
+    countByConversation.set(cid, (countByConversation.get(cid) ?? 0) + 1);
   }
 
-  const peerIds = [...new Set(peerByConversation.values())];
-  if (peerIds.length === 0) return [];
+  const convTypeById = new Map<string, string>();
+  for (const r of rows) {
+    const cid = r.conversation_id as string;
+    const c = r.conversations as { type?: string; title?: string | null } | null;
+    convTypeById.set(cid, String(c?.type ?? "direct"));
+  }
 
-  const { data: profiles, error: profErr } = await supabase
-    .from("profiles")
-    .select("id, username, display_name")
-    .in("id", peerIds);
+  for (const row of members ?? []) {
+    const cid = row.conversation_id as string;
+    if (convTypeById.get(cid) !== "direct") continue;
+    const uid = row.user_id as string;
+    if (uid === userId) continue;
+    directPeerByConversation.set(cid, uid);
+  }
 
-  if (profErr) throw profErr;
+  const peerIds = [...new Set(directPeerByConversation.values())];
+  let profileMap = new Map<string, { username: string; display_name: string }>();
+  if (peerIds.length > 0) {
+    const { data: profiles, error: profErr } = await supabase.from("profiles").select("id, username, display_name").in("id", peerIds);
+    if (profErr) throw profErr;
+    profileMap = new Map(
+      (profiles ?? []).map((p) => [
+        p.id as string,
+        { username: p.username as string, display_name: (p.display_name as string) ?? "" },
+      ]),
+    );
+  }
 
-  const profileMap = new Map(
-    (profiles ?? []).map((p) => [
-      p.id as string,
-      {
-        username: p.username as string,
-        display_name: (p.display_name as string) ?? "",
-      },
-    ]),
-  );
+  return rows.map((r): InboxConversation | null => {
+    const cid = r.conversation_id as string;
+    const conv = r.conversations as { type?: string; title?: string | null };
+    const ctype = String(conv?.type ?? "direct");
+    const roleRaw = r.role as string;
+    const myRole: "admin" | "member" = roleRaw === "admin" ? "admin" : "member";
 
-  return ids
-    .map((cid) => {
-      const peerId = peerByConversation.get(cid);
-      if (!peerId) return null;
-      const prof = profileMap.get(peerId);
-      if (!prof) return null;
+    if (ctype === "group") {
+      const title = (conv.title as string | null)?.trim() || "Group";
       return {
+        kind: "group",
         conversationId: cid,
-        peerUserId: peerId,
-        peerUsername: prof.username,
-        peerDisplayName: prof.display_name || prof.username,
+        title,
+        memberCount: countByConversation.get(cid) ?? 0,
+        myRole,
       };
-    })
-    .filter(Boolean) as ConversationSummary[];
+    }
+
+    const peerId = directPeerByConversation.get(cid);
+    if (!peerId) return null;
+    const prof = profileMap.get(peerId);
+    if (!prof) return null;
+    return {
+      kind: "direct",
+      conversationId: cid,
+      peerUserId: peerId,
+      peerUsername: prof.username,
+      peerDisplayName: prof.display_name || prof.username,
+    };
+  }).filter(Boolean) as InboxConversation[];
+}
+
+/** Direct-message inbox rows only (group chats omitted). */
+export async function listConversationSummaries(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<ConversationSummary[]> {
+  const all = await listInboxConversations(supabase, userId);
+  return all.filter((c): c is ConversationSummary => c.kind === "direct");
 }
 
 export async function createDirectConversationRpc(
