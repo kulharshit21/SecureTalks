@@ -1,16 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight, KeyRound, KeySquare, Shield, Smartphone } from "lucide-react";
+import { KeyRound, KeySquare, Shield, Smartphone } from "lucide-react";
 
 import { APP_NAME } from "@/lib/brand";
+import {
+  SettingsGroup,
+  SettingsPageHeader,
+  SettingsRow,
+  SettingsRowLink,
+  SettingsSection,
+  SettingsShell,
+} from "@/components/settings/settings-shell";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSupabase } from "@/components/providers/supabase-provider";
-import { cn } from "@/lib/utils";
 
 type DeviceRow = { id: string; device_name: string | null; revoked_at: string | null; created_at: string };
 
@@ -46,134 +50,83 @@ export default function SecuritySettingsPage() {
   }, [router, supabase]);
 
   return (
-    <div className="relative min-h-[100dvh]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_85%_45%_at_50%_-15%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent)]" />
-      <div className="relative mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-        <header className="mb-8 space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/chat"
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "sm" }),
-                "-ml-2 gap-1 rounded-xl text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <ArrowLeft className="size-4" aria-hidden />
-              <span className="text-xs font-medium sm:text-sm">Chats</span>
-            </Link>
-          </div>
-          <div>
-            <h1 className="font-sans text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Security</h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Keys, devices, and privacy tools for your {APP_NAME} account.
-            </p>
-          </div>
-        </header>
+    <SettingsShell>
+      <SettingsPageHeader
+        title="Security"
+        description={`Keys, devices, and privacy tools for your ${APP_NAME} account.`}
+        backHref="/chat"
+        backLabel="Chats"
+      />
 
-        <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
-          <Card className="border-border/60 shadow-sm sm:col-span-1">
-            <CardHeader className="space-y-1 pb-3">
-              <CardTitle className="flex items-center gap-2 font-sans text-base font-semibold">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10">
-                  <KeyRound className="size-4 text-primary" aria-hidden />
-                </span>
-                Device PIN
-              </CardTitle>
-              <CardDescription className="text-sm leading-relaxed">
-                Change your PIN from the in-app unlock screen. If you&apos;re locked out, use recovery below.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <Link href="/recover-device" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-10 w-full rounded-xl sm:w-auto")}>
-                Forgot PIN or reset device
-                <ChevronRight className="ml-1 size-4 opacity-70" aria-hidden />
-              </Link>
-            </CardContent>
-          </Card>
+      <div className="space-y-10">
+        <SettingsSection
+          title="Access"
+          description="Protect unlocking and backups for this browser."
+        >
+          <SettingsGroup>
+            <SettingsRowLink
+              href="/recover-device"
+              icon={KeyRound}
+              title="Device PIN"
+              description="Forgot PIN, or reset keys for this device — opens recovery steps."
+            />
+            <SettingsRow
+              icon={KeySquare}
+              iconMuted
+              title="Recovery key"
+              description="Export a backup key for a new browser. Not available yet."
+              trailing={
+                <Badge variant="secondary" className="pointer-events-none shrink-0 border border-border/60 font-medium opacity-80">
+                  Soon
+                </Badge>
+              }
+            />
+          </SettingsGroup>
+        </SettingsSection>
 
-          <Card className="border-border/60 bg-muted/20 shadow-sm sm:col-span-1">
-            <CardHeader className="space-y-1 pb-3">
-              <CardTitle className="flex items-center gap-2 font-sans text-base font-semibold">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-muted">
-                  <KeySquare className="size-4 text-muted-foreground" aria-hidden />
-                </span>
-                Recovery key
-              </CardTitle>
-              <CardDescription className="text-sm leading-relaxed">
-                Export a backup key to recover on a new browser. Shipping in a future update.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <Button type="button" disabled variant="secondary" size="sm" className="h-10 w-full cursor-not-allowed rounded-xl opacity-70 sm:w-auto">
-                Coming soon
-              </Button>
-            </CardContent>
-          </Card>
+        <SettingsSection title="Privacy" description="Read-only checks for your account — no secrets displayed.">
+          <SettingsGroup>
+            <SettingsRowLink
+              href="/security"
+              icon={Shield}
+              title="Privacy check"
+              description="Snapshot of RLS, storage, and environment signals."
+            />
+          </SettingsGroup>
+        </SettingsSection>
 
-          <Card className="border-border/60 shadow-sm sm:col-span-2">
-            <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2 font-sans text-base font-semibold">
-                  <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10">
-                    <Shield className="size-4 text-primary" aria-hidden />
-                  </span>
-                  Privacy check
-                </CardTitle>
-                <CardDescription className="max-w-xl text-sm leading-relaxed">
-                  Read-only snapshot: RLS, storage, and environment signals for this account. No secrets shown.
-                </CardDescription>
+        <SettingsSection
+          title="Devices"
+          description="Devices signed in right now. Revoked devices are hidden by server policy."
+        >
+          <SettingsGroup>
+            {loading ? (
+              <div className="px-4 py-6 text-sm text-muted-foreground sm:px-5">Loading devices…</div>
+            ) : devices.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5">
+                No devices yet. Open the app in this browser to register one.
               </div>
-              <Link
-                href="/security"
-                className={cn(buttonVariants({ variant: "default", size: "sm" }), "h-10 shrink-0 rounded-xl px-5")}
-              >
-                Run check
-              </Link>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-border/60 shadow-sm sm:col-span-2">
-            <CardHeader className="space-y-1 pb-3">
-              <CardTitle className="flex items-center gap-2 font-sans text-base font-semibold">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10">
-                  <Smartphone className="size-4 text-primary" aria-hidden />
-                </span>
-                Your devices
-              </CardTitle>
-              <CardDescription className="text-sm leading-relaxed">
-                Devices currently signed in to this account. Revoked devices are hidden by server policy so they don&apos;t appear
-                here.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {loading ? (
-                <p className="text-sm text-muted-foreground">Loading devices…</p>
-              ) : devices.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
-                  No devices found. Open the app on this browser to register one.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {devices.map((d) => (
-                    <li
-                      key={d.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 dark:border-emerald-500/25"
+            ) : (
+              devices.map((d) => (
+                <SettingsRow
+                  key={d.id}
+                  icon={Smartphone}
+                  title={d.device_name?.trim() || "This device"}
+                  description="Signed in and active."
+                  trailing={
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 border-emerald-500/40 bg-emerald-500/10 font-medium text-emerald-800 dark:text-emerald-400"
                     >
-                      <span className="font-medium text-foreground">{d.device_name?.trim() || "This device"}</span>
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-500/40 bg-emerald-500/10 font-medium text-emerald-800 dark:text-emerald-400"
-                      >
-                        Active
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                      Active
+                    </Badge>
+                  }
+                />
+              ))
+            )}
+          </SettingsGroup>
+        </SettingsSection>
       </div>
-    </div>
+    </SettingsShell>
   );
 }

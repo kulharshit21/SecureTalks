@@ -1,13 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { KeyRound, LogIn, Mail, MessageCircle } from "lucide-react";
 
-import { AuthShell } from "@/components/chat/auth-shell";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  SettingsGroup,
+  SettingsPageHeader,
+  SettingsRowLink,
+  SettingsSection,
+  SettingsShell,
+} from "@/components/settings/settings-shell";
 import { useSupabase } from "@/components/providers/supabase-provider";
-import { cn } from "@/lib/utils";
 
 export default function RecoverDevicePage() {
   const supabase = useSupabase();
@@ -18,51 +21,62 @@ export default function RecoverDevicePage() {
   }, [supabase]);
 
   return (
-    <AuthShell subtitle="Your device PIN protects local message keys — not your email password.">
-      <Card className="w-full max-w-md border-border/60 bg-card/85 shadow-xl backdrop-blur-xl">
-        <CardHeader className="space-y-2 px-8 pb-2 pt-8">
-          <CardTitle className="text-2xl font-semibold tracking-tight">Device access</CardTitle>
-          <CardDescription className="text-sm leading-relaxed">
-            Forgot your <strong>device PIN</strong>? Open the app — on the unlock screen, use &quot;Forgot device PIN?&quot; to reset this
-            browser or try recovery when it&apos;s available. Old messages may not decrypt without the original keys.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 px-8 pb-8">
+    <SettingsShell>
+      <SettingsPageHeader
+        title="Device access"
+        description="Your device PIN protects local message keys — not your account password. Old messages may not decrypt after a full device reset."
+        backHref={signedIn === true ? "/settings/security" : "/login"}
+        backLabel={signedIn === true ? "Security" : "Sign in"}
+      />
+
+      <SettingsSection
+        title="What to do"
+        description={
+          signedIn
+            ? "You’re signed in. Open chats to use unlock or reset from the PIN screen."
+            : "Sign in first. Use account password recovery if you can’t reach your inbox."
+        }
+      >
+        <SettingsGroup>
           {signedIn === null ? (
-            <p className="text-sm text-muted-foreground">Checking session…</p>
+            <div className="px-4 py-6 text-sm text-muted-foreground sm:px-5">Checking session…</div>
           ) : signedIn ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                You&apos;re signed in. Go to <strong>Chats</strong> — the unlock flow offers reset and recovery options.
-              </p>
-              <Link
-                href="/chat"
-                className={cn(buttonVariants({ variant: "default" }), "h-11 w-full rounded-xl px-4 text-center")}
-              >
-                Open inbox
-              </Link>
-            </>
+            <SettingsRowLink
+              href="/chat"
+              icon={MessageCircle}
+              title="Open inbox"
+              description="Continue to the app — unlock screen has “Forgot device PIN?”."
+            />
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">Sign in to your account first. If you forgot your account password, reset it below.</p>
-              <div className="flex flex-col gap-2">
-                <Link
-                  href="/login"
-                  className={cn(buttonVariants({ variant: "secondary" }), "h-11 rounded-xl px-4 text-center")}
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/forgot-password"
-                  className={cn(buttonVariants({ variant: "outline" }), "h-11 rounded-xl px-4 text-center")}
-                >
-                  Forgot account password
-                </Link>
-              </div>
+              <SettingsRowLink
+                href="/login"
+                icon={LogIn}
+                title="Sign in"
+                description="Use your email and account password."
+              />
+              <SettingsRowLink
+                href="/forgot-password"
+                icon={Mail}
+                title="Forgot account password"
+                description="Reset link via email — different from device PIN."
+              />
             </>
           )}
-        </CardContent>
-      </Card>
-    </AuthShell>
+        </SettingsGroup>
+      </SettingsSection>
+
+      <SettingsSection title="About the PIN" description="Short reference — same as in Security settings.">
+        <SettingsGroup>
+          <SettingsRowLink
+            href="/settings/security"
+            icon={KeyRound}
+            iconMuted
+            title="Security settings"
+            description="PIN, devices, and privacy check."
+          />
+        </SettingsGroup>
+      </SettingsSection>
+    </SettingsShell>
   );
 }
