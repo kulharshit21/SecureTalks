@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { MessageSquarePlus, Search, Settings, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,8 +35,11 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCipherSession } from "@/stores/cipher-session";
 
+const MotionLink = motion.create(Link);
+
 export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) {
   const supabase = useSupabase();
+  const reduceMotion = useReducedMotion();
   const router = useRouter();
   const cipherSession = useCipherSession();
   const cipher = cipherSession.cipher;
@@ -250,7 +254,7 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
       <div className="flex items-center gap-2 px-4 pb-3 pt-4">
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/50 bg-card/40 px-3 py-2.5 text-left outline-none ring-offset-background transition-colors hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/50 bg-card/40 px-3 py-2.5 text-left outline-none ring-offset-background shadow-sm transition-[background-color,box-shadow,border-color] hover:border-border/70 hover:bg-muted/30 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Account menu"
           >
             <Avatar className="size-10 shrink-0 border border-border/50">
@@ -278,14 +282,25 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Link
+        <MotionLink
           href="/settings/security"
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-muted/20 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/55 bg-muted/20 text-muted-foreground shadow-sm transition-[color,background-color,box-shadow,transform] hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Security settings"
           onClick={() => props.onNavigate?.()}
+          whileHover={
+            reduceMotion
+              ? {}
+              : {
+                  scale: 1.06,
+                  rotate: -4,
+                  boxShadow: "0 10px 24px -8px color-mix(in oklab, var(--primary) 22%, transparent)",
+                }
+          }
+          whileTap={reduceMotion ? {} : { scale: 0.96 }}
+          transition={{ type: "spring", stiffness: 520, damping: 28 }}
         >
           <Settings className="size-[18px]" aria-hidden />
-        </Link>
+        </MotionLink>
       </div>
 
       <div className="px-4 pb-3">
@@ -428,18 +443,38 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
               ))}
             </div>
           ) : inbox.length === 0 ? (
-            <div className="mx-2 mt-8 rounded-2xl border border-dashed border-border/70 bg-muted/10 px-6 py-14 text-center animate-in fade-in duration-500">
-              <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/8">
-                <MessageSquarePlus className="size-6 text-primary/80" aria-hidden />
-              </div>
-              <p className="text-sm font-semibold tracking-tight">No conversations yet</p>
+            <motion.div
+              className="mx-2 mt-8 rounded-2xl border border-dashed border-border/70 bg-muted/10 px-6 py-14 text-center shadow-[0_12px_40px_-18px_rgb(0_0_0/0.35)] backdrop-blur-sm transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-[0_18px_48px_-16px_color-mix(in_oklab,var(--primary)_14%,transparent)]"
+              initial={reduceMotion ? false : { opacity: 0, y: 14, scale: 0.98 }}
+              animate={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+              transition={{ type: "spring", stiffness: 360, damping: 28 }}
+            >
+              <motion.div
+                className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20"
+                animate={
+                  reduceMotion
+                    ? undefined
+                    : { y: [0, -4, 0], transition: { duration: 4.5, repeat: Infinity, ease: "easeInOut" } }
+                }
+              >
+                <MessageSquarePlus className="size-6 text-primary/85" aria-hidden />
+              </motion.div>
+              <p className="text-sm font-semibold tracking-tight text-foreground">No conversations yet</p>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Start your first private chat.</p>
-              <Button className="mt-6 rounded-xl" variant="secondary" type="button" onClick={() => setNewChatOpen(true)}>
-                Start chat
-              </Button>
-            </div>
+              <motion.div
+                className="mt-6 inline-block"
+                whileHover={reduceMotion ? {} : { scale: 1.03 }}
+                whileTap={reduceMotion ? {} : { scale: 0.98 }}
+              >
+                <Button className="rounded-xl shadow-sm transition-shadow hover:shadow-md" variant="secondary" type="button" onClick={() => setNewChatOpen(true)}>
+                  Start chat
+                </Button>
+              </motion.div>
+            </motion.div>
           ) : (
-            inbox.map((row) => <SidebarRow key={row.conversationId} row={row} onNavigate={props.onNavigate} />)
+            inbox.map((row) => (
+              <SidebarRow key={row.conversationId} row={row} onNavigate={props.onNavigate} reduceMotion={reduceMotion} />
+            ))
           )}
         </div>
       </ScrollArea>
@@ -477,9 +512,16 @@ export function ChatSidebar(props: { userId: string; onNavigate?: () => void }) 
   );
 }
 
-function SidebarRow(props: { row: InboxConversation; onNavigate?: () => void }) {
+function SidebarRow(props: { row: InboxConversation; onNavigate?: () => void; reduceMotion: boolean | null }) {
   const pathname = usePathname();
   const active = pathname === `/chat/${props.row.conversationId}`;
+  const rowHover = props.reduceMotion
+    ? {}
+    : {
+        y: -2,
+        scale: 1.01,
+        boxShadow: "0 12px 28px -10px color-mix(in oklab, var(--foreground) 16%, transparent)",
+      };
 
   const peerInitials = useMemo(() => {
     if (props.row.kind !== "direct") return "?";
@@ -491,13 +533,19 @@ function SidebarRow(props: { row: InboxConversation; onNavigate?: () => void }) 
   if (props.row.kind === "group") {
     const g = props.row;
     return (
-      <Link
+      <MotionLink
         href={`/chat/${g.conversationId}`}
         prefetch={false}
         onClick={() => props.onNavigate?.()}
+        style={{ transformOrigin: "center" }}
+        whileHover={rowHover}
+        whileTap={props.reduceMotion ? {} : { scale: 0.99 }}
+        transition={{ type: "spring", stiffness: 420, damping: 26 }}
         className={cn(
-          "flex items-center gap-3 rounded-2xl px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          active ? "bg-muted/70 ring-1 ring-border/60" : "hover:bg-muted/45",
+          "flex items-center gap-3 rounded-2xl border border-transparent px-3 py-3 transition-[background-color,border-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          active
+            ? "border-border/50 bg-muted/70 shadow-inner ring-1 ring-border/45"
+            : "hover:border-border/35 hover:bg-muted/45",
         )}
       >
         <Avatar className="size-11 shrink-0 border border-border/50">
@@ -511,20 +559,26 @@ function SidebarRow(props: { row: InboxConversation; onNavigate?: () => void }) 
             {g.memberCount} members · {g.myRole}
           </p>
         </div>
-      </Link>
+      </MotionLink>
     );
   }
 
   const d = props.row;
 
   return (
-    <Link
+    <MotionLink
       href={`/chat/${d.conversationId}`}
       prefetch={false}
       onClick={() => props.onNavigate?.()}
+      style={{ transformOrigin: "center" }}
+      whileHover={rowHover}
+      whileTap={props.reduceMotion ? {} : { scale: 0.99 }}
+      transition={{ type: "spring", stiffness: 420, damping: 26 }}
       className={cn(
-        "flex items-center gap-3 rounded-2xl px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        active ? "bg-muted/70 ring-1 ring-border/60" : "hover:bg-muted/45",
+        "flex items-center gap-3 rounded-2xl border border-transparent px-3 py-3 transition-[background-color,border-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        active
+          ? "border-border/50 bg-muted/70 shadow-inner ring-1 ring-border/45"
+          : "hover:border-border/35 hover:bg-muted/45",
       )}
     >
       <Avatar className="size-11 shrink-0 border border-border/50">
@@ -534,6 +588,6 @@ function SidebarRow(props: { row: InboxConversation; onNavigate?: () => void }) 
         <p className="truncate text-sm font-semibold leading-tight">{d.peerDisplayName}</p>
         <p className="truncate text-xs text-muted-foreground">@{d.peerUsername}</p>
       </div>
-    </Link>
+    </MotionLink>
   );
 }

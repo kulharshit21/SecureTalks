@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, useReducedMotion } from "framer-motion";
 import { MessageCircle, PanelLeft, Shield } from "lucide-react";
 
 import { APP_NAME } from "@/lib/brand";
@@ -15,6 +16,8 @@ import { ThemeToggle } from "@/components/chat/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { cn } from "@/lib/utils";
+
+const MotionLink = motion.create(Link);
 
 function PresenceBeacon(props: { userId: string }) {
   const supabase = useSupabase();
@@ -44,6 +47,7 @@ function PresenceBeacon(props: { userId: string }) {
 
 export function ChatShell(props: { userId: string; children: React.ReactNode }) {
   const pathname = usePathname();
+  const reduceMotion = useReducedMotion();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
 
@@ -103,13 +107,27 @@ export function ChatShell(props: { userId: string; children: React.ReactNode }) 
             </div>
 
             <div className="flex items-center gap-2">
-              <Link
+              <MotionLink
                 href="/security"
-                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden rounded-xl gap-2 sm:inline-flex")}
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  "hidden rounded-xl gap-2 shadow-sm transition-shadow sm:inline-flex",
+                )}
+                whileHover={
+                  reduceMotion
+                    ? {}
+                    : {
+                        y: -1,
+                        scale: 1.03,
+                        boxShadow: "0 12px 28px -12px color-mix(in oklab, var(--primary) 20%, transparent)",
+                      }
+                }
+                whileTap={reduceMotion ? {} : { scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 440, damping: 28 }}
               >
                 <Shield className="size-4" aria-hidden />
                 Privacy check
-              </Link>
+              </MotionLink>
               <PrivacyPanelTrigger
                 className="xl:hidden"
                 collapsed
