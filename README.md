@@ -214,3 +214,5 @@ After migrations, **`public.purge_expired_messages()`** deletes expired attachme
 <!-- readme-sync-24 -->
 
 <!-- readme-sync-25 -->
+
+<!-- readme-sync-26 -->
