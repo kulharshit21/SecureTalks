@@ -164,3 +164,5 @@ After migrations, **`public.purge_expired_messages()`** deletes expired attachme
 <sub>Built with intent · vibe-coded UI · honest crypto boundaries</sub>
 
 </div>
+
+<!-- readme-sync-1 -->
