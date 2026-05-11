@@ -35,10 +35,26 @@ export async function dhPublicKeyFromSecret(secretKey: Uint8Array): Promise<Uint
 }
 
 /**
- * Rehydrate signing public key from secret.
+ * Rehydrate signing public key from libsodium's 64-byte crypto_sign secret key.
+ *
+ * Prefer `crypto_sign_ed25519_sk_to_pk` when the WASM build exposes it; otherwise use the
+ * libsodium layout: secretKey = seed (32) || publicKey (32) — see libsodium crypto_sign docs.
+ * libsodium-wrappers 0.8.x often omits sk_to_pk from the JS surface even though types list it.
  */
 export async function signingPublicKeyFromSecret(secretKey: Uint8Array): Promise<Uint8Array> {
-  return withSodium((sodium) => sodium.crypto_sign_ed25519_sk_to_pk(secretKey));
+  return withSodium((sodium) => {
+    const skToPk = sodium.crypto_sign_ed25519_sk_to_pk;
+    if (typeof skToPk === "function") {
+      return skToPk(secretKey);
+    }
+    const n = secretKey.length;
+    const exp = sodium.crypto_sign_SECRETKEYBYTES;
+    const pkLen = sodium.crypto_sign_PUBLICKEYBYTES;
+    if (n !== exp) {
+      throw new Error(`Ed25519 signing secret must be ${exp} bytes (got ${n}).`);
+    }
+    return secretKey.slice(pkLen, n);
+  });
 }
 
 export async function unlockedPrivateCryptoFromVault(blob: Uint8Array): Promise<UnlockedPrivateCrypto> {

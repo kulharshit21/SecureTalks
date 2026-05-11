@@ -3,7 +3,7 @@
 import { describe, expect, test } from "vitest";
 
 import { createMessageCipher, parsePublicKeyBundleJson, publicBundleRecordToJson } from "@/lib/crypto/session";
-import { generateIdentityMaterial } from "@/lib/crypto/identity";
+import { generateIdentityMaterial, signingPublicKeyFromSecret } from "@/lib/crypto/identity";
 import { generateSignedPreKey, generateOneTimePreKeys } from "@/lib/crypto/prekeys";
 import { bytesToB64, b64ToBytes } from "@/lib/crypto/keys";
 import type { MessageAssociatedData, PublicKeyBundleRecord, UnlockedPrivateCrypto } from "@/lib/crypto/types";
@@ -44,6 +44,12 @@ async function makeParticipant(): Promise<{ parsed: ReturnType<typeof parsePubli
 }
 
 describe("client crypto", () => {
+  test("signing public key matches libsodium secret layout (sk_to_pk or slice fallback)", async () => {
+    const id = await generateIdentityMaterial();
+    const derived = await signingPublicKeyFromSecret(id.signing.secretKey);
+    expect(Buffer.from(derived).equals(Buffer.from(id.signing.publicKey))).toBe(true);
+  });
+
   test("encryption/decryption roundtrip", async () => {
     const alice = await makeParticipant();
     const bob = await makeParticipant();
