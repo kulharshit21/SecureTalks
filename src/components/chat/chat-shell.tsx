@@ -123,10 +123,10 @@ export function ChatShell(props: { userId: string; children: React.ReactNode }) 
         </div>
 
         <aside className="hidden h-full w-[min(100vw,320px)] shrink-0 border-l border-border/50 bg-sidebar/40 xl:flex">
-          <PrivacySidePanel userId={props.userId} />
+          <PrivacySidePanel />
         </aside>
 
-        <PrivacyPanelSheet userId={props.userId} open={privacyOpen} onOpenChange={setPrivacyOpen} />
+        <PrivacyPanelSheet open={privacyOpen} onOpenChange={setPrivacyOpen} />
 
         {/* Mobile bottom navigation */}
         <nav className="fixed bottom-0 left-0 right-0 z-40 grid h-14 grid-cols-3 border-t border-border/60 bg-background/90 backdrop-blur-xl md:hidden pb-[env(safe-area-inset-bottom)]">

@@ -7,11 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-export function PrivacyPanelSheet(props: {
-  userId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+export function PrivacyPanelSheet(props: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
@@ -22,7 +18,7 @@ export function PrivacyPanelSheet(props: {
           </SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          <PrivacyPanelContent userId={props.userId} />
+          <PrivacyPanelContent />
         </div>
       </SheetContent>
     </Sheet>

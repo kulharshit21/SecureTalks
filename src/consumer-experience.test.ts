@@ -58,15 +58,6 @@ describe("device reset honesty", () => {
   });
 });
 
-describe("privacy diagnostics gating", () => {
-  it("flag module documents dev vs prod behavior", () => {
-    const fp = path.join(process.cwd(), "src/lib/privacy-diagnostics-flag.ts");
-    const src = fs.readFileSync(fp, "utf8");
-    expect(src).toContain("NODE_ENV");
-    expect(src).toContain("NEXT_PUBLIC_SHOW_PRIVACY_DIAGNOSTICS");
-  });
-});
-
 describe("AI send path", () => {
   it("sendTextMessage body does not invoke Mistral proxy", () => {
     const fp = path.join(process.cwd(), "src/components/chat/message-composer.tsx");
