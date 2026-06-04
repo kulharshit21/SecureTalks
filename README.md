@@ -18,7 +18,6 @@
 [![Libsodium](https://img.shields.io/badge/crypto-libsodium-0969da)](https://libsodium.gitbook.io/)
 
 <br/>
-
 <sub><strong>Solo maintainer · research & architecture ·</strong> <a href="https://github.com/kulharshit21">@kulharshit21</a></sub>
 
 </div>
